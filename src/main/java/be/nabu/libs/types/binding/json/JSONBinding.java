@@ -25,12 +25,17 @@ import be.nabu.utils.io.api.ReadableContainer;
 
 public class JSONBinding extends BaseTypeBinding {
 
-	private Charset charset = Charset.forName("UTF-8");
+	private Charset charset;
 	private CollectionHandler collectionHandler = CollectionHandlerFactory.getInstance().getHandler();
 	private ComplexType type;
-		
-	public JSONBinding(ComplexType type) {
+	
+	public JSONBinding(ComplexType type, Charset charset) {
 		this.type = type;
+		this.charset = charset;
+	}
+	
+	public JSONBinding(ComplexType type) {
+		this(type, Charset.forName("UTF-8"));
 	}
 
 	@Override
