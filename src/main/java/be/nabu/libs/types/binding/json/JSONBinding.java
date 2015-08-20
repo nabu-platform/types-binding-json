@@ -16,6 +16,7 @@ import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.Marshallable;
+import be.nabu.libs.types.api.ModifiableComplexTypeGenerator;
 import be.nabu.libs.types.binding.BaseTypeBinding;
 import be.nabu.libs.types.binding.api.Window;
 import be.nabu.libs.types.java.BeanInstance;
@@ -28,6 +29,14 @@ public class JSONBinding extends BaseTypeBinding {
 	private Charset charset;
 	private CollectionHandler collectionHandler = CollectionHandlerFactory.getInstance().getHandler();
 	private ComplexType type;
+	
+	private boolean allowDynamicElements, addDynamicElementDefinitions;
+	private ModifiableComplexTypeGenerator complexTypeGenerator;
+	
+	public JSONBinding(ModifiableComplexTypeGenerator complexTypeGenerator, Charset charset) {
+		this(complexTypeGenerator.newComplexType(), charset);
+		this.complexTypeGenerator = complexTypeGenerator;
+	}
 	
 	public JSONBinding(ComplexType type, Charset charset) {
 		this.type = type;
@@ -115,7 +124,34 @@ public class JSONBinding extends BaseTypeBinding {
 	@Override
 	protected ComplexContent unmarshal(ReadableResource resource, Window[] windows, Value<?>... values) throws IOException, ParseException {
 		ReadableContainer<CharBuffer> readable = IOUtils.wrapReadable(resource.getReadable(), charset);
-		return new JSONUnmarshaller().unmarshal(readable, type);
+		JSONUnmarshaller jsonUnmarshaller = new JSONUnmarshaller();
+		jsonUnmarshaller.setAddDynamicElementDefinitions(isAddDynamicElementDefinitions());
+		jsonUnmarshaller.setAllowDynamicElements(isAllowDynamicElements());
+		jsonUnmarshaller.setComplexTypeGenerator(getComplexTypeGenerator());
+		return jsonUnmarshaller.unmarshal(readable, type);
 	}
 
+	public boolean isAllowDynamicElements() {
+		return allowDynamicElements;
+	}
+
+	public void setAllowDynamicElements(boolean allowDynamicElements) {
+		this.allowDynamicElements = allowDynamicElements;
+	}
+
+	public boolean isAddDynamicElementDefinitions() {
+		return addDynamicElementDefinitions;
+	}
+
+	public void setAddDynamicElementDefinitions(boolean addDynamicElementDefinitions) {
+		this.addDynamicElementDefinitions = addDynamicElementDefinitions;
+	}
+
+	public ModifiableComplexTypeGenerator getComplexTypeGenerator() {
+		return complexTypeGenerator;
+	}
+
+	public void setComplexTypeGenerator(ModifiableComplexTypeGenerator complexTypeGenerator) {
+		this.complexTypeGenerator = complexTypeGenerator;
+	}
 }

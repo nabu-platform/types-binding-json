@@ -3,9 +3,17 @@ package be.nabu.libs.types.binding.json;
 import java.io.IOException;
 import java.text.ParseException;
 
+import be.nabu.libs.types.SimpleTypeWrapperFactory;
 import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
+import be.nabu.libs.types.api.DefinedSimpleType;
 import be.nabu.libs.types.api.Element;
+import be.nabu.libs.types.api.ModifiableComplexType;
+import be.nabu.libs.types.api.ModifiableComplexTypeGenerator;
+import be.nabu.libs.types.base.ComplexElementImpl;
+import be.nabu.libs.types.base.SimpleElementImpl;
+import be.nabu.libs.types.base.ValueImpl;
+import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.CharBuffer;
 import be.nabu.utils.io.api.CountingReadableContainer;
@@ -23,6 +31,10 @@ public class JSONUnmarshaller {
 	private static final int MAX_SIZE = 1024*1024*10;
 	
 	private CharBuffer buffer = IOUtils.newCharBuffer(LOOK_AHEAD, true);
+	
+	private boolean allowDynamicElements, addDynamicElementDefinitions;
+	
+	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	
 	public ComplexContent unmarshal(ReadableContainer<CharBuffer> reader, ComplexType type) throws IOException, ParseException {
 		CountingReadableContainer<CharBuffer> readable = IOUtils.countReadable(reader);
@@ -104,11 +116,24 @@ public class JSONUnmarshaller {
 		}
 	}
 
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	private void unmarshalSingle(CountingReadableContainer<CharBuffer> readable, String fieldName, ComplexContent content, Integer index) throws IOException, ParseException {
 		Object value = null;
 		Element<?> element = content.getType().get(fieldName);
 		switch(single[0]) {
 			case '{':
+				// if we allow dynamic elements, create one
+				if (allowDynamicElements && element == null && complexTypeGenerator != null) {
+					if (index == null) {
+						element = new ComplexElementImpl(fieldName, complexTypeGenerator.newComplexType(), content.getType());
+					}
+					else {
+						element = new ComplexElementImpl(fieldName, complexTypeGenerator.newComplexType(), content.getType(), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
+					}
+					if (addDynamicElementDefinitions && content.getType() instanceof ModifiableComplexType) {
+						((ModifiableComplexType) content.getType()).add(element);
+					}
+				}
 				if (element == null) {
 					throw new ParseException("The field " + fieldName + " is unexpected at this position", 0);
 				}
@@ -147,6 +172,14 @@ public class JSONUnmarshaller {
 					}
 					value = false;
 				}
+				// should spell "null"
+				else if (single[0] == 'n' || single[0] == 'N') {
+					String rest = IOUtils.toString(IOUtils.limitReadable(readable, 3));
+					if (!rest.equalsIgnoreCase("ull")) {
+						throw new ParseException("The value " + single[0] + rest + " is not valid", 0);
+					}
+					value = null;
+				}
 				// must be a number then...
 				else {
 					delimited = IOUtils.delimit(readable, "[^0-9.E]+", 1);
@@ -156,23 +189,68 @@ public class JSONUnmarshaller {
 					buffer.write(IOUtils.wrap(delimited.getMatchedDelimiter()));
 				}
 		}
-		boolean isList = element.getType().isList(element.getProperties());
-		if (index != null) {
-			if (!isList) {
-				throw new ParseException("The element " + fieldName + " is an array in the json but not a list", 0);
+		if (value != null) {
+			// must be a simple value
+			if (allowDynamicElements && element == null) {
+				DefinedSimpleType<? extends Object> wrap = SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(value.getClass());
+				if (wrap == null) {
+					throw new ParseException("Can not dynamically wrap: " + value, 0);
+				}
+				else if (index == null) {
+					element = new SimpleElementImpl(fieldName, wrap, content.getType());
+				}
+				else {
+					element = new SimpleElementImpl(fieldName, wrap, content.getType(), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
+				}
+				if (addDynamicElementDefinitions && content.getType() instanceof ModifiableComplexType) {
+					((ModifiableComplexType) content.getType()).add(element);
+				}
 			}
-			content.set(fieldName + "[" + index + "]", value);
-		}
-		else if (isList) {
-			throw new ParseException("The element " + fieldName + " is a list but not an array in the json", 0);
-		}
-		else {
-			content.set(fieldName, value);
+			if (element == null) {
+				throw new ParseException("The field " + fieldName + " is unexpected at this position", 0);
+			}
+			boolean isList = element.getType().isList(element.getProperties());
+			if (index != null) {
+				if (!isList) {
+					throw new ParseException("The element " + fieldName + " is an array in the json but not a list", 0);
+				}
+				content.set(fieldName + "[" + index + "]", value);
+			}
+			else if (isList) {
+				throw new ParseException("The element " + fieldName + " is a list but not an array in the json", 0);
+			}
+			else {
+				content.set(fieldName, value);
+			}
 		}
 	}
 	
 	@SuppressWarnings("unchecked")
 	private ReadableContainer<CharBuffer> ignoreWhitespace(ReadableContainer<CharBuffer> parent) {
 		return IOUtils.ignore(IOUtils.chain(false, buffer, parent), ' ', '\t', '\n', '\r');
+	}
+
+	public ModifiableComplexTypeGenerator getComplexTypeGenerator() {
+		return complexTypeGenerator;
+	}
+
+	public void setComplexTypeGenerator(ModifiableComplexTypeGenerator complexTypeGenerator) {
+		this.complexTypeGenerator = complexTypeGenerator;
+	}
+
+	public boolean isAllowDynamicElements() {
+		return allowDynamicElements;
+	}
+
+	public void setAllowDynamicElements(boolean allowDynamicElements) {
+		this.allowDynamicElements = allowDynamicElements;
+	}
+
+	public boolean isAddDynamicElementDefinitions() {
+		return addDynamicElementDefinitions;
+	}
+
+	public void setAddDynamicElementDefinitions(boolean addDynamicElementDefinitions) {
+		this.addDynamicElementDefinitions = addDynamicElementDefinitions;
 	}
 }
