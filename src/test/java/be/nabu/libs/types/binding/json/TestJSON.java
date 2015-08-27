@@ -1,12 +1,17 @@
 package be.nabu.libs.types.binding.json;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.text.ParseException;
+import java.util.Arrays;
 
 import junit.framework.TestCase;
 import be.nabu.libs.types.TypeUtils;
+import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.binding.api.Window;
+import be.nabu.libs.types.java.BeanInstance;
 import be.nabu.libs.types.java.BeanType;
 
 public class TestJSON extends TestCase {
@@ -37,4 +42,18 @@ public class TestJSON extends TestCase {
 		}
 	}
 
+	@SuppressWarnings("rawtypes")
+	public void testRootArrays() throws IOException, ParseException {
+		JSONBinding binding = new JSONBinding(new BeanType<Listable>(Listable.class));
+		binding.setIgnoreRootIfArrayWrapper(true);
+		Listable listable = new Listable();
+		listable.setTests(Arrays.asList(new Listable.TestClass("test1"), new Listable.TestClass("test2")));
+		ByteArrayOutputStream output = new ByteArrayOutputStream();
+		binding.marshal(output, new BeanInstance(listable));
+		String content = new String(output.toByteArray());
+		assertEquals("[{\"name\": \"test1\"}, {\"name\": \"test2\"}]", content);
+		ComplexContent unmarshal = binding.unmarshal(new ByteArrayInputStream(output.toByteArray()), new Window[0]);
+		Listable bean = TypeUtils.getAsBean(unmarshal, Listable.class);
+		assertEquals(listable.getTests(), bean.getTests());
+	}
 }

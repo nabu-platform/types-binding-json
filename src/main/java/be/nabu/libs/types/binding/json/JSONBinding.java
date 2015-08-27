@@ -157,6 +157,7 @@ public class JSONBinding extends BaseTypeBinding {
 	protected ComplexContent unmarshal(ReadableResource resource, Window[] windows, Value<?>... values) throws IOException, ParseException {
 		ReadableContainer<CharBuffer> readable = IOUtils.wrapReadable(resource.getReadable(), charset);
 		JSONUnmarshaller jsonUnmarshaller = new JSONUnmarshaller();
+		jsonUnmarshaller.setIgnoreRootIfArrayWrapper(ignoreRootIfArrayWrapper);
 		jsonUnmarshaller.setAddDynamicElementDefinitions(isAddDynamicElementDefinitions());
 		jsonUnmarshaller.setAllowDynamicElements(isAllowDynamicElements());
 		jsonUnmarshaller.setComplexTypeGenerator(getComplexTypeGenerator());

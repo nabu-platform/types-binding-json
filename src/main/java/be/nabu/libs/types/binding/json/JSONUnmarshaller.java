@@ -2,8 +2,10 @@ package be.nabu.libs.types.binding.json;
 
 import java.io.IOException;
 import java.text.ParseException;
+import java.util.Collection;
 
 import be.nabu.libs.types.SimpleTypeWrapperFactory;
+import be.nabu.libs.types.TypeUtils;
 import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedSimpleType;
@@ -36,12 +38,49 @@ public class JSONUnmarshaller {
 	
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	
+	private boolean ignoreRootIfArrayWrapper = false;
+	
 	public ComplexContent unmarshal(ReadableContainer<CharBuffer> reader, ComplexType type) throws IOException, ParseException {
 		CountingReadableContainer<CharBuffer> readable = IOUtils.countReadable(reader);
 		if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
 			return null;
 		}
-		if (single[0] != '{') {
+		if (single[0] == '[' && ignoreRootIfArrayWrapper) {
+			if (ignoreRootIfArrayWrapper) {
+				Collection<Element<?>> allChildren = TypeUtils.getAllChildren(type);
+				if (allChildren.size() == 1) {
+					Element<?> element = allChildren.iterator().next();
+					if (element.getType().isList(element.getProperties())) {
+						ComplexContent instance = type.newInstance();
+						int index = 0;
+						while (true) {
+							if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
+								throw new IOException("Can not get the next character");
+							}
+							// done
+							if (single[0] == ']') {
+								break;
+							}
+							else {
+								unmarshalSingle(readable, element.getName(), instance, index++);
+							}
+							if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
+								throw new IOException("Can not get the next character");
+							}
+							if (single[0] == ']') {
+								break;
+							}
+							// next
+							else if (single[0] != ',') {
+								throw new ParseException("Expecting a ',' to indicate the next part of the array or a ']' to indicate the end", 0);
+							}
+						}
+						return instance;
+					}
+				}
+			}
+		}
+		else if (single[0] != '{') {
 			throw new ParseException("Expecting a { to open the complex type", 0);
 		}
 		ComplexContent instance = type.newInstance();
@@ -252,5 +291,13 @@ public class JSONUnmarshaller {
 
 	public void setAddDynamicElementDefinitions(boolean addDynamicElementDefinitions) {
 		this.addDynamicElementDefinitions = addDynamicElementDefinitions;
+	}
+
+	public boolean isIgnoreRootIfArrayWrapper() {
+		return ignoreRootIfArrayWrapper;
+	}
+
+	public void setIgnoreRootIfArrayWrapper(boolean ignoreRootIfArrayWrapper) {
+		this.ignoreRootIfArrayWrapper = ignoreRootIfArrayWrapper;
 	}
 }
