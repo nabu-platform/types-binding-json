@@ -6,11 +6,13 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.Charset;
 import java.text.ParseException;
+import java.util.Collection;
 
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.api.ReadableResource;
 import be.nabu.libs.types.CollectionHandlerFactory;
 import be.nabu.libs.types.ComplexContentWrapperFactory;
+import be.nabu.libs.types.TypeUtils;
 import be.nabu.libs.types.api.CollectionHandler;
 import be.nabu.libs.types.api.CollectionHandlerProvider;
 import be.nabu.libs.types.api.ComplexContent;
@@ -32,6 +34,7 @@ public class JSONBinding extends BaseTypeBinding {
 	
 	private boolean allowDynamicElements, addDynamicElementDefinitions;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
+	private boolean ignoreRootIfArrayWrapper = false;
 	
 	public JSONBinding(ModifiableComplexTypeGenerator complexTypeGenerator, Charset charset) {
 		this(complexTypeGenerator.newComplexType(), charset);
@@ -47,10 +50,39 @@ public class JSONBinding extends BaseTypeBinding {
 		this(type, Charset.forName("UTF-8"));
 	}
 
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	@Override
 	public void marshal(OutputStream output, ComplexContent content, Value<?>...values) throws IOException {
 		Writer writer = new OutputStreamWriter(output, charset);
-		marshal(writer, content, values);
+		boolean alreadyWritten = false;
+		if (ignoreRootIfArrayWrapper) {
+			Collection<Element<?>> allChildren = TypeUtils.getAllChildren(content.getType());
+			if (allChildren.size() == 1) {
+				Element<?> element = allChildren.iterator().next();
+				if (element.getType().isList(element.getProperties())) {
+					alreadyWritten = true;
+					writer.write("[");
+					Object value = content.get(element.getName());
+					if (value != null) {
+						CollectionHandlerProvider handler = collectionHandler.getHandler(value.getClass());
+						boolean isFirst = true;
+						for (Object child : handler.getAsCollection(value)) {
+							if (isFirst) {
+								isFirst = false;
+							}
+							else {
+								writer.write(", ");
+							}
+							marshal(writer, child, element);
+						}
+					}
+					writer.write("]");
+				}
+			}
+		}
+		if (!alreadyWritten) {
+			marshal(writer, content, values);
+		}
 		writer.flush();
 	}
 	
@@ -154,4 +186,13 @@ public class JSONBinding extends BaseTypeBinding {
 	public void setComplexTypeGenerator(ModifiableComplexTypeGenerator complexTypeGenerator) {
 		this.complexTypeGenerator = complexTypeGenerator;
 	}
+
+	public boolean isIgnoreRootIfArrayWrapper() {
+		return ignoreRootIfArrayWrapper;
+	}
+
+	public void setIgnoreRootIfArrayWrapper(boolean ignoreRootIfArrayWrapper) {
+		this.ignoreRootIfArrayWrapper = ignoreRootIfArrayWrapper;
+	}
+	
 }
