@@ -10,6 +10,7 @@ import java.text.ParseException;
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.api.ReadableResource;
 import be.nabu.libs.types.CollectionHandlerFactory;
+import be.nabu.libs.types.ComplexContentWrapperFactory;
 import be.nabu.libs.types.api.CollectionHandler;
 import be.nabu.libs.types.api.CollectionHandlerProvider;
 import be.nabu.libs.types.api.ComplexContent;
@@ -19,7 +20,6 @@ import be.nabu.libs.types.api.Marshallable;
 import be.nabu.libs.types.api.ModifiableComplexTypeGenerator;
 import be.nabu.libs.types.binding.BaseTypeBinding;
 import be.nabu.libs.types.binding.api.Window;
-import be.nabu.libs.types.java.BeanInstance;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.CharBuffer;
 import be.nabu.utils.io.api.ReadableContainer;
@@ -102,7 +102,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private void marshal(Writer writer, Object value, Element<?> element) throws IOException {
 		if (element.getType() instanceof ComplexType) {
 			if (!(value instanceof ComplexContent)) {
-				value = new BeanInstance(value);
+				value = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(value);
 			}
 			marshal(writer, (ComplexContent) value, element.getProperties());
 		}
