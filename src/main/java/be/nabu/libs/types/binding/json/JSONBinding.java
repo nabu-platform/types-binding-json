@@ -90,6 +90,9 @@ public class JSONBinding extends BaseTypeBinding {
 	private void marshal(Writer writer, ComplexContent content, Value<?>...values) throws IOException {
 		writer.write("{");
 		boolean isFirst = true;
+		if (content.getType() == null) {
+			throw new NullPointerException("No complex type found for: " + content.getClass().getName());
+		}
 		for (Element<?> element : (ComplexType) content.getType()) {
 			Object value = content.get(element.getName());
 			if (element.getType().isList(element.getProperties())) {
