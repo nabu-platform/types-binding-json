@@ -137,7 +137,13 @@ public class JSONBinding extends BaseTypeBinding {
 	private void marshal(Writer writer, Object value, Element<?> element) throws IOException {
 		if (element.getType() instanceof ComplexType) {
 			if (!(value instanceof ComplexContent)) {
-				value = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(value);
+				Object converted = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(value);
+				if (converted == null) {
+					throw new ClassCastException("Can not convert " + value + " in " + element.getParent() + " to a complex content");
+				}
+				else {
+					value = converted;
+				}
 			}
 			marshal(writer, (ComplexContent) value, element.getProperties());
 		}
