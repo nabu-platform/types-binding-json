@@ -93,7 +93,7 @@ public class JSONBinding extends BaseTypeBinding {
 		if (content.getType() == null) {
 			throw new NullPointerException("No complex type found for: " + content.getClass().getName());
 		}
-		for (Element<?> element : (ComplexType) content.getType()) {
+		for (Element<?> element : TypeUtils.getAllChildren((ComplexType) content.getType())) {
 			Object value = content.get(element.getName());
 			if (element.getType().isList(element.getProperties())) {
 				if (isFirst) {
