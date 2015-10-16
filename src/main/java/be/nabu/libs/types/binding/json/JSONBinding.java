@@ -135,7 +135,10 @@ public class JSONBinding extends BaseTypeBinding {
 	
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	private void marshal(Writer writer, Object value, Element<?> element) throws IOException {
-		if (element.getType() instanceof ComplexType) {
+		if (value == null) {
+			writer.write("null");
+		}
+		else if (element.getType() instanceof ComplexType) {
 			if (!(value instanceof ComplexContent)) {
 				Object converted = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(value);
 				if (converted == null) {
