@@ -35,6 +35,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private boolean allowDynamicElements, addDynamicElementDefinitions;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
+	private boolean writeEmptyLists = false;
 	
 	public JSONBinding(ModifiableComplexTypeGenerator complexTypeGenerator, Charset charset) {
 		this(complexTypeGenerator.newComplexType(), charset);
@@ -96,27 +97,30 @@ public class JSONBinding extends BaseTypeBinding {
 		for (Element<?> element : TypeUtils.getAllChildren((ComplexType) content.getType())) {
 			Object value = content.get(element.getName());
 			if (element.getType().isList(element.getProperties())) {
-				if (isFirst) {
-					isFirst = false;
-				}
-				else {
-					writer.write(", ");
-				}
-				writer.write("\"" + element.getName() + "\": [");
-				if (value != null) {
-					CollectionHandlerProvider handler = collectionHandler.getHandler(value.getClass());
-					boolean isFirstChild = true;
-					for (Object child : handler.getAsCollection(value)) {
-						if (isFirstChild) {
-							isFirstChild = false;
-						}
-						else {
-							writer.write(", ");
-						}
-						marshal(writer, child, element);
+				// only write the list if the value is not null or we explicitly enable the "writeEmptyLists" boolean
+				if (value != null || writeEmptyLists) {
+					if (isFirst) {
+						isFirst = false;
 					}
+					else {
+						writer.write(", ");
+					}
+					writer.write("\"" + element.getName() + "\": [");
+					if (value != null) {
+						CollectionHandlerProvider handler = collectionHandler.getHandler(value.getClass());
+						boolean isFirstChild = true;
+						for (Object child : handler.getAsCollection(value)) {
+							if (isFirstChild) {
+								isFirstChild = false;
+							}
+							else {
+								writer.write(", ");
+							}
+							marshal(writer, child, element);
+						}
+					}
+					writer.write("]");
 				}
-				writer.write("]");
 			}
 			// only write a non-list value if it is not null
 			else if (value != null) {
@@ -207,5 +211,12 @@ public class JSONBinding extends BaseTypeBinding {
 	public void setIgnoreRootIfArrayWrapper(boolean ignoreRootIfArrayWrapper) {
 		this.ignoreRootIfArrayWrapper = ignoreRootIfArrayWrapper;
 	}
-	
+
+	public boolean isWriteEmptyLists() {
+		return writeEmptyLists;
+	}
+
+	public void setWriteEmptyLists(boolean writeEmptyLists) {
+		this.writeEmptyLists = writeEmptyLists;
+	}
 }
