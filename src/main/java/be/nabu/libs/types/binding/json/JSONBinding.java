@@ -163,7 +163,7 @@ public class JSONBinding extends BaseTypeBinding {
 				String marshalledValue = ((Marshallable) element.getType()).marshal(value, element.getProperties());
 				// escape
 				marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
-					.replace("\n", "\\n").replaceAll("\r", "");
+					.replace("\n", "\\n").replaceAll("\r", "").replaceAll("\t", "\\t");
 				writer.write("\"" + marshalledValue + "\"");
 			}
 		}

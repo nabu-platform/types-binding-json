@@ -187,7 +187,7 @@ public class JSONUnmarshaller {
 			case '"':
 				DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, MAX_SIZE), "[^\\\\]*\"$", 2);
 				String fieldValue = IOUtils.toString(delimited);
-				fieldValue = fieldValue.replaceAll("(?<!\\\\)\\\\n", "\n").replace("\\\\", "\\").replace("\\\"", "\"");
+				fieldValue = fieldValue.replaceAll("(?<!\\\\)\\\\n", "\n").replaceAll("(?<!\\\\)\\\\t", "\t").replace("\\\\", "\\").replace("\\\"", "\"");
 				if (!delimited.isDelimiterFound()) {
 					throw new ParseException("Could not find the closing quote of the string value", 0);
 				}

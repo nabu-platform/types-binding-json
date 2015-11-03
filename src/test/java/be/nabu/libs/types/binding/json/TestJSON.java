@@ -26,7 +26,7 @@ public class TestJSON extends TestCase {
 			assertEquals("Nabu HQ", result.getAddress());
 			assertEquals("BE666-66-66", result.getBillingNumber());
 			assertEquals(24, result.getEmployees().size());
-			assertEquals("John1", result.getEmployees().get(1).getFirstName());
+			assertEquals("John	1", result.getEmployees().get(1).getFirstName());
 			
 			assertEquals(new Integer(31), result.getEmployees().get(0).getAge());
 			assertEquals(new Integer(57), result.getEmployees().get(1).getAge());
