@@ -34,7 +34,7 @@ public class JSONUnmarshaller {
 	
 	private CharBuffer buffer = IOUtils.newCharBuffer(LOOK_AHEAD, true);
 	
-	private boolean allowDynamicElements, addDynamicElementDefinitions;
+	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements;
 	
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	
@@ -158,7 +158,7 @@ public class JSONUnmarshaller {
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	private void unmarshalSingle(CountingReadableContainer<CharBuffer> readable, String fieldName, ComplexContent content, Integer index) throws IOException, ParseException {
 		Object value = null;
-		Element<?> element = content.getType().get(fieldName);
+		Element<?> element = content == null ? null : content.getType().get(fieldName);
 		switch(single[0]) {
 			case '{':
 				// if we allow dynamic elements, create one
@@ -173,13 +173,13 @@ public class JSONUnmarshaller {
 						((ModifiableComplexType) content.getType()).add(element);
 					}
 				}
-				if (element == null) {
+				if (!ignoreUnknownElements && element == null) {
 					throw new ParseException("The field " + fieldName + " is unexpected at this position", 0);
 				}
-				else if (!(element.getType() instanceof ComplexType)) {
+				else if (element != null && !(element.getType() instanceof ComplexType)) {
 					throw new ParseException("The field " + fieldName + " is not a complex type", 0);
 				}
-				ComplexContent child = ((ComplexType) element.getType()).newInstance();
+				ComplexContent child = element == null ? null : ((ComplexType) element.getType()).newInstance();
 				// recursively parse
 				readField(readable, child);
 				value = child;
@@ -230,7 +230,7 @@ public class JSONUnmarshaller {
 		}
 		if (value != null) {
 			// must be a simple value
-			if (allowDynamicElements && element == null) {
+			if (!ignoreUnknownElements && allowDynamicElements && element == null) {
 				DefinedSimpleType<? extends Object> wrap = SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(value.getClass());
 				if (wrap == null) {
 					throw new ParseException("Can not dynamically wrap: " + value, 0);
@@ -245,21 +245,23 @@ public class JSONUnmarshaller {
 					((ModifiableComplexType) content.getType()).add(element);
 				}
 			}
-			if (element == null) {
+			if (!ignoreUnknownElements && element == null) {
 				throw new ParseException("The field " + fieldName + " is unexpected at this position", 0);
 			}
-			boolean isList = element.getType().isList(element.getProperties());
-			if (index != null) {
-				if (!isList) {
-					throw new ParseException("The element " + fieldName + " is an array in the json but not a list", 0);
+			if (content != null && element != null) {
+				boolean isList = element.getType().isList(element.getProperties());
+				if (index != null) {
+					if (!isList) {
+						throw new ParseException("The element " + fieldName + " is an array in the json but not a list", 0);
+					}
+					content.set(fieldName + "[" + index + "]", value);
 				}
-				content.set(fieldName + "[" + index + "]", value);
-			}
-			else if (isList) {
-				throw new ParseException("The element " + fieldName + " is a list but not an array in the json", 0);
-			}
-			else {
-				content.set(fieldName, value);
+				else if (isList) {
+					throw new ParseException("The element " + fieldName + " is a list but not an array in the json", 0);
+				}
+				else {
+					content.set(fieldName, value);
+				}
 			}
 		}
 	}
@@ -300,4 +302,13 @@ public class JSONUnmarshaller {
 	public void setIgnoreRootIfArrayWrapper(boolean ignoreRootIfArrayWrapper) {
 		this.ignoreRootIfArrayWrapper = ignoreRootIfArrayWrapper;
 	}
+
+	public boolean isIgnoreUnknownElements() {
+		return ignoreUnknownElements;
+	}
+
+	public void setIgnoreUnknownElements(boolean ignoreUnknownElements) {
+		this.ignoreUnknownElements = ignoreUnknownElements;
+	}
+	
 }

@@ -32,7 +32,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private CollectionHandler collectionHandler = CollectionHandlerFactory.getInstance().getHandler();
 	private ComplexType type;
 	
-	private boolean allowDynamicElements, addDynamicElementDefinitions;
+	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
 	private boolean writeEmptyLists = false;
@@ -176,6 +176,7 @@ public class JSONBinding extends BaseTypeBinding {
 		jsonUnmarshaller.setIgnoreRootIfArrayWrapper(ignoreRootIfArrayWrapper);
 		jsonUnmarshaller.setAddDynamicElementDefinitions(isAddDynamicElementDefinitions());
 		jsonUnmarshaller.setAllowDynamicElements(isAllowDynamicElements());
+		jsonUnmarshaller.setIgnoreUnknownElements(ignoreUnknownElements);
 		jsonUnmarshaller.setComplexTypeGenerator(getComplexTypeGenerator());
 		return jsonUnmarshaller.unmarshal(readable, type);
 	}
@@ -219,4 +220,13 @@ public class JSONBinding extends BaseTypeBinding {
 	public void setWriteEmptyLists(boolean writeEmptyLists) {
 		this.writeEmptyLists = writeEmptyLists;
 	}
+
+	public boolean isIgnoreUnknownElements() {
+		return ignoreUnknownElements;
+	}
+
+	public void setIgnoreUnknownElements(boolean ignoreUnknownElements) {
+		this.ignoreUnknownElements = ignoreUnknownElements;
+	}
+	
 }
