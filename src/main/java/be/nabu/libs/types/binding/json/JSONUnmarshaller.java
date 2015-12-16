@@ -3,6 +3,8 @@ package be.nabu.libs.types.binding.json;
 import java.io.IOException;
 import java.text.ParseException;
 import java.util.Collection;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import be.nabu.libs.types.SimpleTypeWrapperFactory;
 import be.nabu.libs.types.TypeUtils;
@@ -39,7 +41,10 @@ public class JSONUnmarshaller {
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	
 	private boolean ignoreRootIfArrayWrapper = false;
+	private boolean strict;
+	private boolean decodeUnicode = true;
 	
+	@SuppressWarnings("unchecked")
 	public ComplexContent unmarshal(ReadableContainer<CharBuffer> reader, ComplexType type) throws IOException, ParseException {
 		CountingReadableContainer<CharBuffer> readable = IOUtils.countReadable(reader);
 		if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
@@ -80,34 +85,51 @@ public class JSONUnmarshaller {
 				}
 			}
 		}
+		// it is possible to send complex types (at the root) without a {} around it, e.g. facebook on oauth2 token request sends something like:
+		// access_token=<token>
 		else if (single[0] != '{') {
-			throw new ParseException("Expecting a { to open the complex type", 0);
+			if (strict) {
+				throw new ParseException("Expecting a { to open the complex type", 0);
+			}
+			else {
+				readable = IOUtils.countReadable(IOUtils.chain(false, IOUtils.wrap(single, true), readable));
+			}
 		}
 		ComplexContent instance = type.newInstance();
 		readField(readable, instance);
 		return instance;
 	}
 	
+	@SuppressWarnings("unchecked")
 	private void readField(CountingReadableContainer<CharBuffer> readable, ComplexContent content) throws ParseException, IOException {
 		while(true) {
 			if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
 				throw new IOException("Could not read any data");
 			}
+			DelimitedCharContainer delimited;
 			// first we expect an opening quote
-			if (single[0] != '"') {
+			if (single[0] == '"') {
+				delimited = IOUtils.delimit(IOUtils.limitReadable(readable, LOOK_AHEAD), "[^\\\\]*\"$", 2);
+			}
+			else if (strict) {
 				throw new ParseException("Expecting a field", 0);
 			}
-			DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, LOOK_AHEAD), "[^\\\\]*\"$", 2);
+			// this is to support "invalid" json fields that do not have quotes around them, e.g. facebook sends back _invalid_ json without quotes around the field names
+			else {
+				delimited = IOUtils.delimit(IOUtils.limitReadable(IOUtils.chain(false, IOUtils.wrap(single, true), readable), LOOK_AHEAD), "[\\s]*:$", 2);
+			}
 			String fieldName = IOUtils.toString(delimited);
 			if (!delimited.isDelimiterFound()) {
-				throw new ParseException("Could not find end quote of tag name", 0);
+				throw new ParseException("Could not find delimiter of tag name: " + fieldName, 0);
 			}
-			// next we need to read a ":"
-			if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
-				throw new IOException("Can not get the next character");
-			}
-			if (single[0] != ':') {
-				throw new ParseException("Expecting a ':' after a field declaration", 0);
+			if (strict || !":".equals(delimited.getMatchedDelimiter())) {
+				// next we need to read a ":"
+				if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
+					throw new IOException("Can not get the next character");
+				}
+				if (single[0] != ':') {
+					throw new ParseException("Expecting a ':' after a field declaration", 0);
+				}
 			}
 			// skip the whitespace and read one character, this char will determine what the field is
 			if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
@@ -187,9 +209,16 @@ public class JSONUnmarshaller {
 			case '"':
 				DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, MAX_SIZE), "[^\\\\]*\"$", 2);
 				String fieldValue = IOUtils.toString(delimited);
-				fieldValue = fieldValue.replaceAll("(?<!\\\\)\\\\n", "\n").replaceAll("(?<!\\\\)\\\\t", "\t").replace("\\\\", "\\").replace("\\\"", "\"").replace("\\/", "/");
 				if (!delimited.isDelimiterFound()) {
 					throw new ParseException("Could not find the closing quote of the string value", 0);
+				}
+				fieldValue = fieldValue.replaceAll("(?<!\\\\)\\\\n", "\n").replaceAll("(?<!\\\\)\\\\t", "\t").replace("\\\\", "\\").replace("\\\"", "\"").replace("\\/", "/");
+				if (decodeUnicode) {
+					Pattern pattern = Pattern.compile("\\\\u([0-9a-f]{4})");
+					Matcher matcher = pattern.matcher(fieldValue);
+					while(matcher.find()) {
+						fieldValue = fieldValue.replace(matcher.group(), new String(new char [] { (char) Integer.parseInt(matcher.group(1), 16) }));
+					}
 				}
 				value = fieldValue;
 			break;
