@@ -7,6 +7,7 @@ import java.io.Writer;
 import java.nio.charset.Charset;
 import java.text.ParseException;
 import java.util.Collection;
+import java.util.Map;
 
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.api.ReadableResource;
@@ -35,7 +36,6 @@ public class JSONBinding extends BaseTypeBinding {
 	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
-	private boolean writeEmptyLists = false;
 	
 	public JSONBinding(ModifiableComplexTypeGenerator complexTypeGenerator, Charset charset) {
 		this(complexTypeGenerator.newComplexType(), charset);
@@ -98,28 +98,44 @@ public class JSONBinding extends BaseTypeBinding {
 			Object value = content.get(element.getName());
 			if (element.getType().isList(element.getProperties())) {
 				// only write the list if the value is not null or we explicitly enable the "writeEmptyLists" boolean
-				if (value != null || writeEmptyLists) {
+				if (value != null) {
 					if (isFirst) {
 						isFirst = false;
 					}
 					else {
 						writer.write(", ");
 					}
-					writer.write("\"" + element.getName() + "\": [");
-					if (value != null) {
-						CollectionHandlerProvider handler = collectionHandler.getHandler(value.getClass());
-						boolean isFirstChild = true;
-						for (Object child : handler.getAsCollection(value)) {
+					boolean isFirstChild = true;
+					if (value instanceof Map) {
+						writer.write("\"" + element.getName() + "\": {");
+						for (Object key : ((Map) value).keySet()) {
 							if (isFirstChild) {
 								isFirstChild = false;
 							}
 							else {
 								writer.write(", ");
 							}
-							marshal(writer, child, element);
+							writer.write("\"" + key.toString() + "\": ");
+							marshal(writer, ((Map) value).get(key), element);
 						}
+						writer.write("}");
 					}
-					writer.write("]");
+					else {
+						CollectionHandlerProvider handler = collectionHandler.getHandler(value.getClass());
+						writer.write("\"" + element.getName() + "\": [");
+						if (value != null) {
+							for (Object child : handler.getAsCollection(value)) {
+								if (isFirstChild) {
+									isFirstChild = false;
+								}
+								else {
+									writer.write(", ");
+								}
+								marshal(writer, child, element);
+							}
+						}
+						writer.write("]");
+					}
 				}
 			}
 			// only write a non-list value if it is not null
@@ -211,14 +227,6 @@ public class JSONBinding extends BaseTypeBinding {
 
 	public void setIgnoreRootIfArrayWrapper(boolean ignoreRootIfArrayWrapper) {
 		this.ignoreRootIfArrayWrapper = ignoreRootIfArrayWrapper;
-	}
-
-	public boolean isWriteEmptyLists() {
-		return writeEmptyLists;
-	}
-
-	public void setWriteEmptyLists(boolean writeEmptyLists) {
-		this.writeEmptyLists = writeEmptyLists;
 	}
 
 	public boolean isIgnoreUnknownElements() {
