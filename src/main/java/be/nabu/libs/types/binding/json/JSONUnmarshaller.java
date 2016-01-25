@@ -6,17 +6,23 @@ import java.util.Collection;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import be.nabu.libs.types.BaseTypeInstance;
+import be.nabu.libs.types.CollectionHandlerFactory;
 import be.nabu.libs.types.SimpleTypeWrapperFactory;
 import be.nabu.libs.types.TypeUtils;
+import be.nabu.libs.types.api.CollectionHandlerProvider;
 import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedSimpleType;
 import be.nabu.libs.types.api.Element;
+import be.nabu.libs.types.api.KeyValuePair;
 import be.nabu.libs.types.api.ModifiableComplexType;
 import be.nabu.libs.types.api.ModifiableComplexTypeGenerator;
+import be.nabu.libs.types.api.TypeInstance;
 import be.nabu.libs.types.base.ComplexElementImpl;
 import be.nabu.libs.types.base.SimpleElementImpl;
 import be.nabu.libs.types.base.ValueImpl;
+import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.CharBuffer;
@@ -107,8 +113,12 @@ public class JSONUnmarshaller {
 				throw new IOException("Could not read any data");
 			}
 			DelimitedCharContainer delimited;
+			// it could be immediately closed
+			if (single[0] == '}') {
+				break;
+			}
 			// first we expect an opening quote
-			if (single[0] == '"') {
+			else if (single[0] == '"') {
 				delimited = IOUtils.delimit(IOUtils.limitReadable(readable, LOOK_AHEAD), "[^\\\\]*\"$", 2);
 			}
 			else if (strict) {
@@ -258,6 +268,19 @@ public class JSONUnmarshaller {
 				}
 		}
 		if (value != null) {
+			boolean isKeyValuePair = false;
+			// if there is no element, let's see if you have a catch all keyvaluepair list
+			if (element == null) {
+				TypeInstance keyValueInstance = new BaseTypeInstance(BeanResolver.getInstance().resolve(KeyValuePair.class));
+				for (Element<?> child : TypeUtils.getAllChildren(content.getType())) {
+					// apart from it being a list, other child properties don't matter so strip them for subset comparison 
+					if (child.getType().isList(child.getProperties()) && TypeUtils.isSubset(new BaseTypeInstance(child.getType()), keyValueInstance)) {
+						element = child;
+						isKeyValuePair = true;
+						break;
+					}
+				}
+			}
 			// must be a simple value
 			if (!ignoreUnknownElements && allowDynamicElements && element == null) {
 				DefinedSimpleType<? extends Object> wrap = SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(value.getClass());
@@ -278,18 +301,39 @@ public class JSONUnmarshaller {
 				throw new ParseException("The field " + fieldName + " is unexpected at this position", 0);
 			}
 			if (content != null && element != null) {
-				boolean isList = element.getType().isList(element.getProperties());
-				if (index != null) {
-					if (!isList) {
-						throw new ParseException("The element " + fieldName + " is an array in the json but not a list", 0);
+				if (isKeyValuePair) {
+					String key = fieldName;
+					if (index != null) {
+						key += "[" + index + "]";
 					}
-					content.set(fieldName + "[" + index + "]", value);
-				}
-				else if (isList) {
-					throw new ParseException("The element " + fieldName + " is a list but not an array in the json", 0);
+					ComplexContent keyValuePair = ((ComplexType) element.getType()).newInstance();
+					keyValuePair.set("key", key);
+					keyValuePair.set("value", value);
+					Object object = content.get(element.getName());
+					int keyValuePairIndex = 0;
+					if (object != null) {
+						CollectionHandlerProvider handler = CollectionHandlerFactory.getInstance().getHandler().getHandler(object.getClass());
+						if (handler == null) {
+							throw new IllegalStateException("Expecting a collection of key value pairs");
+						}
+						keyValuePairIndex = handler.getIndexes(object).size();
+					}
+					content.set(element.getName() + "[" + keyValuePairIndex + "]", keyValuePair);
 				}
 				else {
-					content.set(fieldName, value);
+					boolean isList = element.getType().isList(element.getProperties());
+					if (index != null) {
+						if (!isList) {
+							throw new ParseException("The element " + fieldName + " is an array in the json but not a list", 0);
+						}
+						content.set(fieldName + "[" + index + "]", value);
+					}
+					else if (isList) {
+						throw new ParseException("The element " + fieldName + " is a list but not an array in the json", 0);
+					}
+					else {
+						content.set(fieldName, value);
+					}
 				}
 			}
 		}
