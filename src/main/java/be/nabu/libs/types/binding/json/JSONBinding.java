@@ -33,7 +33,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private CollectionHandler collectionHandler = CollectionHandlerFactory.getInstance().getHandler();
 	private ComplexType type;
 	
-	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements;
+	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
 	
@@ -194,6 +194,8 @@ public class JSONBinding extends BaseTypeBinding {
 		jsonUnmarshaller.setAllowDynamicElements(isAllowDynamicElements());
 		jsonUnmarshaller.setIgnoreUnknownElements(ignoreUnknownElements);
 		jsonUnmarshaller.setComplexTypeGenerator(getComplexTypeGenerator());
+		jsonUnmarshaller.setCamelCaseDashes(camelCaseDashes);
+		jsonUnmarshaller.setCamelCaseUnderscores(camelCaseUnderscores);
 		return jsonUnmarshaller.unmarshal(readable, type);
 	}
 
@@ -235,6 +237,22 @@ public class JSONBinding extends BaseTypeBinding {
 
 	public void setIgnoreUnknownElements(boolean ignoreUnknownElements) {
 		this.ignoreUnknownElements = ignoreUnknownElements;
+	}
+
+	public boolean isCamelCaseDashes() {
+		return camelCaseDashes;
+	}
+
+	public void setCamelCaseDashes(boolean camelCaseDashes) {
+		this.camelCaseDashes = camelCaseDashes;
+	}
+
+	public boolean isCamelCaseUnderscores() {
+		return camelCaseUnderscores;
+	}
+
+	public void setCamelCaseUnderscores(boolean camelCaseUnderscores) {
+		this.camelCaseUnderscores = camelCaseUnderscores;
 	}
 	
 }

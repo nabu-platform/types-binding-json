@@ -22,6 +22,7 @@ import be.nabu.libs.types.api.TypeInstance;
 import be.nabu.libs.types.base.ComplexElementImpl;
 import be.nabu.libs.types.base.SimpleElementImpl;
 import be.nabu.libs.types.base.ValueImpl;
+import be.nabu.libs.types.binding.BindingUtils;
 import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.utils.io.IOUtils;
@@ -42,7 +43,7 @@ public class JSONUnmarshaller {
 	
 	private CharBuffer buffer = IOUtils.newCharBuffer(LOOK_AHEAD, true);
 	
-	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements;
+	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores;
 	
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	
@@ -128,7 +129,7 @@ public class JSONUnmarshaller {
 			else {
 				delimited = IOUtils.delimit(IOUtils.limitReadable(IOUtils.chain(false, IOUtils.wrap(single, true), readable), LOOK_AHEAD), "[\\s]*:$", 2);
 			}
-			String fieldName = IOUtils.toString(delimited);
+			String fieldName = preprocess(IOUtils.toString(delimited));
 			if (!delimited.isDelimiterFound()) {
 				throw new ParseException("Could not find delimiter of tag name: " + fieldName, 0);
 			}
@@ -185,6 +186,16 @@ public class JSONUnmarshaller {
 				throw new ParseException("Expecting a ',' at this position, not " + single[0], (int) readable.getReadTotal());
 			}
 		}
+	}
+	
+	private String preprocess(String name) {
+		if (camelCaseDashes) {
+			name = BindingUtils.camelCaseCharacter(name, '-');
+		}
+		if (camelCaseUnderscores) {
+			name = BindingUtils.camelCaseCharacter(name, '_');			
+		}
+		return name;
 	}
 
 	@SuppressWarnings({ "rawtypes", "unchecked" })
@@ -382,6 +393,22 @@ public class JSONUnmarshaller {
 
 	public void setIgnoreUnknownElements(boolean ignoreUnknownElements) {
 		this.ignoreUnknownElements = ignoreUnknownElements;
+	}
+
+	public boolean isCamelCaseDashes() {
+		return camelCaseDashes;
+	}
+
+	public void setCamelCaseDashes(boolean camelCaseDashes) {
+		this.camelCaseDashes = camelCaseDashes;
+	}
+
+	public boolean isCamelCaseUnderscores() {
+		return camelCaseUnderscores;
+	}
+
+	public void setCamelCaseUnderscores(boolean camelCaseUnderscores) {
+		this.camelCaseUnderscores = camelCaseUnderscores;
 	}
 	
 }
