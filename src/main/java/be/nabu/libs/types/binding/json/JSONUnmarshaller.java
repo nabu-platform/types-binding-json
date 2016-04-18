@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import be.nabu.libs.resources.URIUtils;
 import be.nabu.libs.types.BaseTypeInstance;
 import be.nabu.libs.types.CollectionHandlerFactory;
 import be.nabu.libs.types.SimpleTypeWrapperFactory;
@@ -43,7 +44,7 @@ public class JSONUnmarshaller {
 	
 	private CharBuffer buffer = IOUtils.newCharBuffer(LOOK_AHEAD, true);
 	
-	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores;
+	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, normalize = true;
 	
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	
@@ -129,7 +130,7 @@ public class JSONUnmarshaller {
 			else {
 				delimited = IOUtils.delimit(IOUtils.limitReadable(IOUtils.chain(false, IOUtils.wrap(single, true), readable), LOOK_AHEAD), "[\\s]*:$", 2);
 			}
-			String fieldName = preprocess(IOUtils.toString(delimited));
+			String fieldName = preprocess(encodeFieldName(unescape(IOUtils.toString(delimited))));
 			if (!delimited.isDelimiterFound()) {
 				throw new ParseException("Could not find delimiter of tag name: " + fieldName, 0);
 			}
@@ -188,7 +189,19 @@ public class JSONUnmarshaller {
 		}
 	}
 	
+	/**
+	 * In JSON the field names can be _anything_, we need to encode it in order to pass through stuff like the ParsedPath etc
+	 */
+	private String encodeFieldName(String name) {
+		return name == null ? null : URIUtils.encodeURIComponent(name);
+	}
+	
 	private String preprocess(String name) {
+		if (normalize) {
+			while (name.startsWith("-") || name.startsWith("_")) {
+				name = name.substring(1);
+			}
+		}
 		if (camelCaseDashes) {
 			name = BindingUtils.camelCaseCharacter(name, '-');
 		}
@@ -202,6 +215,10 @@ public class JSONUnmarshaller {
 	private void unmarshalSingle(CountingReadableContainer<CharBuffer> readable, String fieldName, ComplexContent content, Integer index) throws IOException, ParseException {
 		Object value = null;
 		Element<?> element = content == null ? null : content.getType().get(fieldName);
+		// could be working with aliases
+		if (element != null) {
+			fieldName = element.getName();
+		}
 		switch(single[0]) {
 			case '{':
 				// if we allow dynamic elements, create one
@@ -233,7 +250,7 @@ public class JSONUnmarshaller {
 				if (!delimited.isDelimiterFound()) {
 					throw new ParseException("Could not find the closing quote of the string value", 0);
 				}
-				fieldValue = fieldValue.replaceAll("(?<!\\\\)\\\\n", "\n").replaceAll("(?<!\\\\)\\\\t", "\t").replace("\\\\", "\\").replace("\\\"", "\"").replace("\\/", "/");
+				fieldValue = unescape(fieldValue);
 				if (decodeUnicode) {
 					Pattern pattern = Pattern.compile("\\\\u([0-9a-f]{4})");
 					Matcher matcher = pattern.matcher(fieldValue);
@@ -348,6 +365,10 @@ public class JSONUnmarshaller {
 				}
 			}
 		}
+	}
+	
+	private String unescape(String value) {
+		return value == null ? null : value.replaceAll("(?<!\\\\)\\\\n", "\n").replaceAll("(?<!\\\\)\\\\t", "\t").replace("\\\\", "\\").replace("\\\"", "\"").replace("\\/", "/");
 	}
 	
 	@SuppressWarnings("unchecked")
