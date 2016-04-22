@@ -2,6 +2,7 @@ package be.nabu.libs.types.binding.json;
 
 import java.io.IOException;
 import java.text.ParseException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -32,6 +33,8 @@ import be.nabu.utils.io.api.CountingReadableContainer;
 import be.nabu.utils.io.api.DelimitedCharContainer;
 import be.nabu.utils.io.api.ReadableContainer;
 
+import java.util.ArrayList;
+
 /**
  * Much easier if i can use the definition to parse...
  */
@@ -59,37 +62,42 @@ public class JSONUnmarshaller {
 			return null;
 		}
 		if (single[0] == '[' && ignoreRootIfArrayWrapper) {
-			if (ignoreRootIfArrayWrapper) {
-				Collection<Element<?>> allChildren = TypeUtils.getAllChildren(type);
-				if (allChildren.size() == 1) {
-					Element<?> element = allChildren.iterator().next();
-					if (element.getType().isList(element.getProperties())) {
-						ComplexContent instance = type.newInstance();
-						int index = 0;
-						while (true) {
-							if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
-								throw new IOException("Can not get the next character");
-							}
-							// done
-							if (single[0] == ']') {
-								break;
-							}
-							else {
-								unmarshalSingle(readable, element.getName(), instance, index++);
-							}
-							if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
-								throw new IOException("Can not get the next character");
-							}
-							if (single[0] == ']') {
-								break;
-							}
-							// next
-							else if (single[0] != ',') {
-								throw new ParseException("Expecting a ',' to indicate the next part of the array or a ']' to indicate the end", 0);
-							}
+			Collection<Element<?>> allChildren = TypeUtils.getAllChildren(type);
+			if (allChildren.size() == 0 && allowDynamicElements && complexTypeGenerator != null) {
+				Element<?> element = new ComplexElementImpl("list", complexTypeGenerator.newComplexType(), type, new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
+				if (addDynamicElementDefinitions && type instanceof ModifiableComplexType) {
+					((ModifiableComplexType) type).add(element);
+				}
+				allChildren = new ArrayList<Element<?>>(Arrays.asList(element));
+			}
+			if (allChildren.size() == 1) {
+				Element<?> element = allChildren.iterator().next();
+				if (element.getType().isList(element.getProperties())) {
+					ComplexContent instance = type.newInstance();
+					int index = 0;
+					while (true) {
+						if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
+							throw new IOException("Can not get the next character");
 						}
-						return instance;
+						// done
+						if (single[0] == ']') {
+							break;
+						}
+						else {
+							unmarshalSingle(readable, element.getName(), instance, index++);
+						}
+						if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
+							throw new IOException("Can not get the next character");
+						}
+						if (single[0] == ']') {
+							break;
+						}
+						// next
+						else if (single[0] != ',') {
+							throw new ParseException("Expecting a ',' to indicate the next part of the array or a ']' to indicate the end", 0);
+						}
 					}
+					return instance;
 				}
 			}
 		}
