@@ -64,7 +64,7 @@ public class JSONUnmarshaller {
 		if (single[0] == '[' && ignoreRootIfArrayWrapper) {
 			Collection<Element<?>> allChildren = TypeUtils.getAllChildren(type);
 			if (allChildren.size() == 0 && allowDynamicElements && complexTypeGenerator != null) {
-				Element<?> element = new ComplexElementImpl("list", complexTypeGenerator.newComplexType(), type, new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
+				Element<?> element = new ComplexElementImpl("array", complexTypeGenerator.newComplexType(), type, new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
 				if (addDynamicElementDefinitions && type instanceof ModifiableComplexType) {
 					((ModifiableComplexType) type).add(element);
 				}
