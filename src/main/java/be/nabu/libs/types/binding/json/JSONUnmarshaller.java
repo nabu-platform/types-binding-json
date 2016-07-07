@@ -1,6 +1,8 @@
 package be.nabu.libs.types.binding.json;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.Collection;
@@ -54,6 +56,7 @@ public class JSONUnmarshaller {
 	private boolean ignoreRootIfArrayWrapper = false;
 	private boolean strict;
 	private boolean decodeUnicode = true;
+	private boolean parseNumbers = false;
 	
 	@SuppressWarnings("unchecked")
 	public ComplexContent unmarshal(ReadableContainer<CharBuffer> reader, ComplexType type) throws IOException, ParseException {
@@ -298,6 +301,29 @@ public class JSONUnmarshaller {
 				else {
 					delimited = IOUtils.delimit(readable, "[^0-9.E]+", 1);
 					value = single[0] + IOUtils.toString(delimited);
+					if (parseNumbers) {
+						try {
+							if (((String) value).contains(".")) {
+								value = Double.parseDouble((String) value);
+							}
+							else {
+								value = Long.parseLong((String) value);
+							}
+						}
+						catch (Exception e) {
+							try {
+								if (((String) value).contains(".")) {
+									value = new BigDecimal((String) value);
+								}
+								else {
+									value = new BigInteger((String) value);
+								}
+							}
+							catch (Exception e1) {
+								// just leave it as string
+							}
+						}
+					}
 					// the number is delimited by something that is not a number and this is very likely a valid part of the json syntax
 					// push this back onto the buffer so it is taken into account for the next parse
 					buffer.write(IOUtils.wrap(delimited.getMatchedDelimiter()));
@@ -439,5 +465,13 @@ public class JSONUnmarshaller {
 	public void setCamelCaseUnderscores(boolean camelCaseUnderscores) {
 		this.camelCaseUnderscores = camelCaseUnderscores;
 	}
-	
+
+	public boolean isParseNumbers() {
+		return parseNumbers;
+	}
+
+	public void setParseNumbers(boolean parseNumbers) {
+		this.parseNumbers = parseNumbers;
+	}
+
 }
