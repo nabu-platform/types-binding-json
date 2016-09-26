@@ -50,6 +50,7 @@ public class JSONUnmarshaller {
 	private CharBuffer buffer = IOUtils.newCharBuffer(LOOK_AHEAD, true);
 	
 	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, normalize = true;
+	private boolean allowRawNames;
 	
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	
@@ -141,7 +142,10 @@ public class JSONUnmarshaller {
 			else {
 				delimited = IOUtils.delimit(IOUtils.limitReadable(IOUtils.chain(false, IOUtils.wrap(single, true), readable), LOOK_AHEAD), "[\\s]*:$", 2);
 			}
-			String fieldName = preprocess(encodeFieldName(unescape(IOUtils.toString(delimited))));
+			String fieldName = IOUtils.toString(delimited);
+			if (!allowRawNames) {
+				fieldName = preprocess(encodeFieldName(unescape(fieldName)));
+			}
 			if (!delimited.isDelimiterFound()) {
 				throw new ParseException("Could not find delimiter of tag name: " + fieldName, 0);
 			}
@@ -204,7 +208,7 @@ public class JSONUnmarshaller {
 	 * In JSON the field names can be _anything_, we need to encode it in order to pass through stuff like the ParsedPath etc
 	 */
 	private String encodeFieldName(String name) {
-		return name == null ? null : URIUtils.encodeURIComponent(name);
+		return name == null ? name : URIUtils.encodeURIComponent(name);
 	}
 	
 	private String preprocess(String name) {
@@ -472,6 +476,14 @@ public class JSONUnmarshaller {
 
 	public void setParseNumbers(boolean parseNumbers) {
 		this.parseNumbers = parseNumbers;
+	}
+
+	public boolean isAllowRawNames() {
+		return allowRawNames;
+	}
+
+	public void setAllowRawNames(boolean allowRawNames) {
+		this.allowRawNames = allowRawNames;
 	}
 
 }

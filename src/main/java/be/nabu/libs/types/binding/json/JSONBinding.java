@@ -33,7 +33,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private CollectionHandler collectionHandler = CollectionHandlerFactory.getInstance().getHandler();
 	private ComplexType type;
 	
-	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, parseNumbers;
+	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, parseNumbers, allowRaw;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
 	
@@ -177,9 +177,11 @@ public class JSONBinding extends BaseTypeBinding {
 			// everything else has to be stringified
 			else {
 				String marshalledValue = ((Marshallable) element.getType()).marshal(value, element.getProperties());
-				// escape
-				marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
-					.replace("\n", "\\n").replaceAll("\r", "").replace("\t", "\\t").replace("/", "\\/");
+				if (!allowRaw) {
+					// escape
+					marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
+						.replace("\n", "\\n").replaceAll("\r", "").replace("\t", "\\t").replace("/", "\\/");
+				}
 				writer.write("\"" + marshalledValue + "\"");
 			}
 		}
@@ -197,6 +199,7 @@ public class JSONBinding extends BaseTypeBinding {
 		jsonUnmarshaller.setCamelCaseDashes(camelCaseDashes);
 		jsonUnmarshaller.setCamelCaseUnderscores(camelCaseUnderscores);
 		jsonUnmarshaller.setParseNumbers(parseNumbers);
+		jsonUnmarshaller.setAllowRawNames(allowRaw);
 		return jsonUnmarshaller.unmarshal(readable, type);
 	}
 
@@ -262,6 +265,14 @@ public class JSONBinding extends BaseTypeBinding {
 
 	public void setParseNumbers(boolean parseNumbers) {
 		this.parseNumbers = parseNumbers;
+	}
+
+	public boolean isAllowRaw() {
+		return allowRaw;
+	}
+
+	public void setAllowRaw(boolean allowRaw) {
+		this.allowRaw = allowRaw;
 	}
 
 }
