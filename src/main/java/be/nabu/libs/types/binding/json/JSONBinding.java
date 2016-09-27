@@ -169,7 +169,7 @@ public class JSONBinding extends BaseTypeBinding {
 								if (prettyPrint) {
 									printDepth(writer, depth + 2);
 								}
-								marshal(writer, child, element, depth);
+								marshal(writer, child, element, depth + 1);
 							}
 						}
 						if (prettyPrint) {
