@@ -36,6 +36,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, parseNumbers, allowRaw;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
+	private boolean prettyPrint;
 	
 	public JSONBinding(ModifiableComplexTypeGenerator complexTypeGenerator, Charset charset) {
 		this(complexTypeGenerator.newComplexType(), charset);
@@ -63,6 +64,9 @@ public class JSONBinding extends BaseTypeBinding {
 				if (element.getType().isList(element.getProperties())) {
 					alreadyWritten = true;
 					writer.write("[");
+					if (prettyPrint) {
+						writer.write("\n");
+					}
 					Object value = content.get(element.getName());
 					if (value != null) {
 						CollectionHandlerProvider handler = collectionHandler.getHandler(value.getClass());
@@ -74,22 +78,34 @@ public class JSONBinding extends BaseTypeBinding {
 							else {
 								writer.write(", ");
 							}
-							marshal(writer, child, element);
+							marshal(writer, child, element, 0);
 						}
+					}
+					if (prettyPrint) {
+						writer.write("\n");
 					}
 					writer.write("]");
 				}
 			}
 		}
 		if (!alreadyWritten) {
-			marshal(writer, content, values);
+			marshal(writer, content, 0, values);
 		}
 		writer.flush();
 	}
 	
+	private void printDepth(Writer writer, int depth) throws IOException {
+		for (int i = 0; i < depth; i++) {
+			writer.write("\t");
+		}
+	}
+	
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	private void marshal(Writer writer, ComplexContent content, Value<?>...values) throws IOException {
+	private void marshal(Writer writer, ComplexContent content, int depth, Value<?>...values) throws IOException {
 		writer.write("{");
+		if (prettyPrint) {
+			writer.write("\n");
+		}
 		boolean isFirst = true;
 		if (content.getType() == null) {
 			throw new NullPointerException("No complex type found for: " + content.getClass().getName());
@@ -104,6 +120,9 @@ public class JSONBinding extends BaseTypeBinding {
 					}
 					else {
 						writer.write(", ");
+						if (prettyPrint) {
+							writer.write("\n");
+						}
 					}
 					boolean isFirstChild = true;
 					if (value instanceof Map) {
@@ -115,14 +134,27 @@ public class JSONBinding extends BaseTypeBinding {
 							else {
 								writer.write(", ");
 							}
+							if (prettyPrint) {
+								printDepth(writer, depth + 1);
+							}
 							writer.write("\"" + key.toString() + "\": ");
-							marshal(writer, ((Map) value).get(key), element);
+							marshal(writer, ((Map) value).get(key), element, depth);
+						}
+						if (prettyPrint) {
+							writer.write("\n");
+							printDepth(writer, depth);
 						}
 						writer.write("}");
 					}
 					else {
 						CollectionHandlerProvider handler = collectionHandler.getHandler(value.getClass());
+						if (prettyPrint) {
+							printDepth(writer, depth + 1);
+						}
 						writer.write("\"" + element.getName() + "\": [");
+						if (prettyPrint) {
+							writer.write("\n");
+						}
 						if (value != null) {
 							for (Object child : handler.getAsCollection(value)) {
 								if (isFirstChild) {
@@ -130,9 +162,19 @@ public class JSONBinding extends BaseTypeBinding {
 								}
 								else {
 									writer.write(", ");
+									if (prettyPrint) {
+										writer.write("\n");
+									}
 								}
-								marshal(writer, child, element);
+								if (prettyPrint) {
+									printDepth(writer, depth + 2);
+								}
+								marshal(writer, child, element, depth);
 							}
+						}
+						if (prettyPrint) {
+							writer.write("\n");
+							printDepth(writer, depth + 1);
 						}
 						writer.write("]");
 					}
@@ -145,16 +187,26 @@ public class JSONBinding extends BaseTypeBinding {
 				}
 				else {
 					writer.write(", ");
+					if (prettyPrint) {
+						writer.write("\n");
+					}
+				}
+				if (prettyPrint) {
+					printDepth(writer, depth + 1);
 				}
 				writer.write("\"" + element.getName() + "\": ");
-				marshal(writer, value, element);
+				marshal(writer, value, element, depth);
 			}
+		}
+		if (prettyPrint) {
+			writer.write("\n");
+			printDepth(writer, depth);
 		}
 		writer.write("}");
 	}
 	
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	private void marshal(Writer writer, Object value, Element<?> element) throws IOException {
+	private void marshal(Writer writer, Object value, Element<?> element, int depth) throws IOException {
 		if (value == null) {
 			writer.write("null");
 		}
@@ -168,7 +220,7 @@ public class JSONBinding extends BaseTypeBinding {
 					value = converted;
 				}
 			}
-			marshal(writer, (ComplexContent) value, element.getProperties());
+			marshal(writer, (ComplexContent) value, depth + 1, element.getProperties());
 		}
 		else {
 			if (value instanceof Boolean || value instanceof Number) {
@@ -273,6 +325,14 @@ public class JSONBinding extends BaseTypeBinding {
 
 	public void setAllowRaw(boolean allowRaw) {
 		this.allowRaw = allowRaw;
+	}
+
+	public boolean isPrettyPrint() {
+		return prettyPrint;
+	}
+
+	public void setPrettyPrint(boolean prettyPrint) {
+		this.prettyPrint = prettyPrint;
 	}
 
 }
