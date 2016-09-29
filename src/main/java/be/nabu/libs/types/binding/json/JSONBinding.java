@@ -135,6 +135,7 @@ public class JSONBinding extends BaseTypeBinding {
 								writer.write(", ");
 							}
 							if (prettyPrint) {
+								writer.write("\n");
 								printDepth(writer, depth + 1);
 							}
 							writer.write("\"" + key.toString() + "\": ");
@@ -152,27 +153,26 @@ public class JSONBinding extends BaseTypeBinding {
 							printDepth(writer, depth + 1);
 						}
 						writer.write("\"" + element.getName() + "\": [");
-						if (prettyPrint) {
+						Collection collection = handler.getAsCollection(value);
+						if (prettyPrint && !collection.isEmpty()) {
 							writer.write("\n");
 						}
-						if (value != null) {
-							for (Object child : handler.getAsCollection(value)) {
-								if (isFirstChild) {
-									isFirstChild = false;
-								}
-								else {
-									writer.write(", ");
-									if (prettyPrint) {
-										writer.write("\n");
-									}
-								}
-								if (prettyPrint) {
-									printDepth(writer, depth + 2);
-								}
-								marshal(writer, child, element, depth + 1);
+						for (Object child : collection) {
+							if (isFirstChild) {
+								isFirstChild = false;
 							}
+							else {
+								writer.write(", ");
+								if (prettyPrint) {
+									writer.write("\n");
+								}
+							}
+							if (prettyPrint) {
+								printDepth(writer, depth + 2);
+							}
+							marshal(writer, child, element, depth + 1);
 						}
-						if (prettyPrint) {
+						if (prettyPrint && !collection.isEmpty()) {
 							writer.write("\n");
 							printDepth(writer, depth + 1);
 						}
