@@ -6,6 +6,7 @@ import java.math.BigInteger;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -13,6 +14,7 @@ import be.nabu.libs.resources.URIUtils;
 import be.nabu.libs.types.BaseTypeInstance;
 import be.nabu.libs.types.CollectionHandlerFactory;
 import be.nabu.libs.types.SimpleTypeWrapperFactory;
+import be.nabu.libs.types.TypeConverterFactory;
 import be.nabu.libs.types.TypeUtils;
 import be.nabu.libs.types.api.CollectionHandlerProvider;
 import be.nabu.libs.types.api.ComplexContent;
@@ -88,7 +90,7 @@ public class JSONUnmarshaller {
 							break;
 						}
 						else {
-							unmarshalSingle(readable, element.getName(), instance, index++);
+							unmarshalSingle(readable, element.getName(), instance, index++, false);
 						}
 						if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
 							throw new IOException("Can not get the next character");
@@ -116,12 +118,12 @@ public class JSONUnmarshaller {
 			}
 		}
 		ComplexContent instance = type.newInstance();
-		readField(readable, instance);
+		readField(readable, instance, false);
 		return instance;
 	}
 	
 	@SuppressWarnings("unchecked")
-	private void readField(CountingReadableContainer<CharBuffer> readable, ComplexContent content) throws ParseException, IOException {
+	private void readField(CountingReadableContainer<CharBuffer> readable, ComplexContent content, boolean inDynamic) throws ParseException, IOException {
 		while(true) {
 			if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
 				throw new IOException("Could not read any data");
@@ -174,7 +176,7 @@ public class JSONUnmarshaller {
 						break;
 					}
 					else {
-						unmarshalSingle(readable, fieldName, content, index++);
+						unmarshalSingle(readable, fieldName, content, index++, inDynamic);
 					}
 					if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
 						throw new IOException("Can not get the next character");
@@ -189,7 +191,7 @@ public class JSONUnmarshaller {
 				}
 			}
 			else {
-				unmarshalSingle(readable, fieldName, content, null);
+				unmarshalSingle(readable, fieldName, content, null, inDynamic);
 			}
 			// it has to be a ',' or a '}'
 			if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
@@ -227,13 +229,15 @@ public class JSONUnmarshaller {
 	}
 
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	private void unmarshalSingle(CountingReadableContainer<CharBuffer> readable, String fieldName, ComplexContent content, Integer index) throws IOException, ParseException {
+	private void unmarshalSingle(CountingReadableContainer<CharBuffer> readable, String fieldName, ComplexContent content, Integer index, boolean inDynamic) throws IOException, ParseException {
 		Object value = null;
 		Element<?> element = content == null ? null : content.getType().get(fieldName);
 		// could be working with aliases
 		if (element != null) {
 			fieldName = element.getName();
 		}
+		
+		boolean dynamicToKeyValue = false;
 		switch(single[0]) {
 			case '{':
 				// if we allow dynamic elements, create one
@@ -244,9 +248,13 @@ public class JSONUnmarshaller {
 					else {
 						element = new ComplexElementImpl(fieldName, complexTypeGenerator.newComplexType(), content.getType(), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
 					}
-					if (addDynamicElementDefinitions && content.getType() instanceof ModifiableComplexType) {
+					if ((addDynamicElementDefinitions || inDynamic) && content.getType() instanceof ModifiableComplexType) {
 						((ModifiableComplexType) content.getType()).add(element);
 					}
+					else if (!inDynamic) {
+						dynamicToKeyValue = true;
+					}
+					inDynamic = true;
 				}
 				if (!ignoreUnknownElements && element == null) {
 					throw new ParseException("The field " + fieldName + " is unexpected at this position", 0);
@@ -256,7 +264,7 @@ public class JSONUnmarshaller {
 				}
 				ComplexContent child = element == null ? null : ((ComplexType) element.getType()).newInstance();
 				// recursively parse
-				readField(readable, child);
+				readField(readable, child, inDynamic);
 				value = child;
 			break;
 			case '"':
@@ -336,7 +344,7 @@ public class JSONUnmarshaller {
 		if (value != null) {
 			boolean isKeyValuePair = false;
 			// if there is no element, let's see if you have a catch all keyvaluepair list
-			if (element == null) {
+			if (element == null || dynamicToKeyValue) {
 				TypeInstance keyValueInstance = new BaseTypeInstance(BeanResolver.getInstance().resolve(KeyValuePair.class));
 				for (Element<?> child : TypeUtils.getAllChildren(content.getType())) {
 					// apart from it being a list, other child properties don't matter so strip them for subset comparison 
@@ -359,7 +367,7 @@ public class JSONUnmarshaller {
 				else {
 					element = new SimpleElementImpl(fieldName, wrap, content.getType(), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
 				}
-				if (addDynamicElementDefinitions && content.getType() instanceof ModifiableComplexType) {
+				if ((addDynamicElementDefinitions || inDynamic) && content.getType() instanceof ModifiableComplexType) {
 					((ModifiableComplexType) content.getType()).add(element);
 				}
 			}
@@ -372,19 +380,40 @@ public class JSONUnmarshaller {
 					if (index != null) {
 						key += "[" + index + "]";
 					}
-					ComplexContent keyValuePair = ((ComplexType) element.getType()).newInstance();
-					keyValuePair.set("key", key);
-					keyValuePair.set("value", value);
-					Object object = content.get(element.getName());
-					int keyValuePairIndex = 0;
-					if (object != null) {
-						CollectionHandlerProvider handler = CollectionHandlerFactory.getInstance().getHandler().getHandler(object.getClass());
-						if (handler == null) {
-							throw new IllegalStateException("Expecting a collection of key value pairs");
+					if (value instanceof ComplexContent) {
+						List<Object> keyValues = new ArrayList<Object>();
+						toProperties((ComplexContent) value, keyValues, null, (ComplexType) element.getType());
+						Object object = content.get(element.getName());
+						int keyValuePairIndex = 0;
+						if (object != null) {
+							CollectionHandlerProvider handler = CollectionHandlerFactory.getInstance().getHandler().getHandler(object.getClass());
+							if (handler == null) {
+								throw new IllegalStateException("Expecting a collection of key value pairs");
+							}
+							keyValuePairIndex = handler.getIndexes(object).size();
 						}
-						keyValuePairIndex = handler.getIndexes(object).size();
+						for (Object single : keyValues) {
+							content.set(element.getName() + "[" + keyValuePairIndex++ + "]", single);
+						}
 					}
-					content.set(element.getName() + "[" + keyValuePairIndex + "]", keyValuePair);
+					else {
+						ComplexContent keyValuePair = ((ComplexType) element.getType()).newInstance();
+						keyValuePair.set("key", key);
+						keyValuePair.set("value", value);
+						Object object = content.get(element.getName());
+						int keyValuePairIndex = 0;
+						if (object != null) {
+							CollectionHandlerProvider handler = CollectionHandlerFactory.getInstance().getHandler().getHandler(object.getClass());
+							if (handler == null) {
+								throw new IllegalStateException("Expecting a collection of key value pairs");
+							}
+							keyValuePairIndex = handler.getIndexes(object).size();
+						}
+						content.set(element.getName() + "[" + keyValuePairIndex + "]", keyValuePair);
+					}
+				}
+				else if (dynamicToKeyValue) {
+					throw new ParseException("Created a dynamic type for field '" + fieldName + "' but found no key value pair to map it to", 0);
 				}
 				else {
 					boolean isList = element.getType().isList(element.getProperties());
@@ -402,6 +431,49 @@ public class JSONUnmarshaller {
 					}
 				}
 			}
+		}
+	}
+	
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	private static void toProperties(ComplexContent content, List<Object> properties, String path, ComplexType keyValuePairDefinition) {
+		for (Element<?> child : TypeUtils.getAllChildren(content.getType())) {
+			String childPath = path == null ? child.getName() : path + "." + child.getName();
+			java.lang.Object value = content.get(child.getName());
+			if (value != null) {
+				CollectionHandlerProvider collectionHandler = CollectionHandlerFactory.getInstance().getHandler().getHandler(value.getClass());
+				if (collectionHandler != null) {
+					for (java.lang.Object index : collectionHandler.getIndexes(value)) {
+						java.lang.Object singleValue = collectionHandler.get(value, index);
+						if (singleValue != null) {
+							String singlePath = childPath;
+							if (index instanceof Number) {
+								singlePath += "[" + index + "]";
+							}
+							else {
+								singlePath += "[\"" + index + "\"]";
+							}
+							singleToProperties(child, singleValue, properties, singlePath, keyValuePairDefinition);
+						}
+					}
+				}
+				else {
+					singleToProperties(child, value, properties, childPath, keyValuePairDefinition);
+				}
+			}
+		}
+	}
+	
+	private static void singleToProperties(Element<?> child, java.lang.Object value, List<Object> properties, String childPath, ComplexType keyValuePairDefinition) {
+		if (value instanceof ComplexContent) {
+			toProperties((ComplexContent) value, properties, childPath, keyValuePairDefinition);
+		}
+		else {
+			ComplexContent newInstance = keyValuePairDefinition.newInstance();
+			newInstance.set("key", childPath);
+			newInstance.set("value", value instanceof String 
+				? (String) value
+				: (java.lang.String) TypeConverterFactory.getInstance().getConverter().convert(value, child, new BaseTypeInstance(new be.nabu.libs.types.simple.String())));
+			properties.add(newInstance);
 		}
 	}
 	
