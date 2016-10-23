@@ -51,7 +51,7 @@ public class JSONUnmarshaller {
 	
 	private CharBuffer buffer = IOUtils.newCharBuffer(LOOK_AHEAD, true);
 	
-	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, normalize = true;
+	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, normalize = true, setEmptyArrays;
 	private boolean allowRawNames;
 	
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
@@ -102,6 +102,10 @@ public class JSONUnmarshaller {
 						else if (single[0] != ',') {
 							throw new ParseException("Expecting a ',' to indicate the next part of the array or a ']' to indicate the end", 0);
 						}
+					}
+					// no elements
+					if (index == 0 && setEmptyArrays) {
+						instance.set(element.getName(), new ArrayList<Object>());
 					}
 					return instance;
 				}
@@ -188,6 +192,10 @@ public class JSONUnmarshaller {
 					else if (single[0] != ',') {
 						throw new ParseException("Expecting a ',' to indicate the next part of the array or a ']' to indicate the end", 0);
 					}
+				}
+				// no elements
+				if (index == 0 && setEmptyArrays) {
+					content.set(fieldName, new ArrayList<Object>());
 				}
 			}
 			else {
@@ -556,6 +564,14 @@ public class JSONUnmarshaller {
 
 	public void setAllowRawNames(boolean allowRawNames) {
 		this.allowRawNames = allowRawNames;
+	}
+
+	public boolean isSetEmptyArrays() {
+		return setEmptyArrays;
+	}
+
+	public void setSetEmptyArrays(boolean setEmptyArrays) {
+		this.setEmptyArrays = setEmptyArrays;
 	}
 
 }
