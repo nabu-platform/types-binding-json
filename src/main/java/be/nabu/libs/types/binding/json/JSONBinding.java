@@ -71,7 +71,7 @@ public class JSONBinding extends BaseTypeBinding {
 					if (value != null) {
 						CollectionHandlerProvider handler = collectionHandler.getHandler(value.getClass());
 						boolean isFirst = true;
-						for (Object child : handler.getAsCollection(value)) {
+						for (Object child : handler.getAsIterable(value)) {
 							if (isFirst) {
 								isFirst = false;
 							}
@@ -153,11 +153,12 @@ public class JSONBinding extends BaseTypeBinding {
 							printDepth(writer, depth + 1);
 						}
 						writer.write("\"" + element.getName() + "\": [");
-						Collection collection = handler.getAsCollection(value);
-						if (prettyPrint && !collection.isEmpty()) {
-							writer.write("\n");
-						}
-						for (Object child : collection) {
+						boolean hasContent = false;
+						for (Object child : handler.getAsIterable(value)) {
+							if (prettyPrint && !hasContent) {
+								hasContent = true;
+								writer.write("\n");
+							}
 							if (isFirstChild) {
 								isFirstChild = false;
 							}
@@ -172,7 +173,7 @@ public class JSONBinding extends BaseTypeBinding {
 							}
 							marshal(writer, child, element, depth + 1);
 						}
-						if (prettyPrint && !collection.isEmpty()) {
+						if (prettyPrint && hasContent) {
 							writer.write("\n");
 							printDepth(writer, depth + 1);
 						}
