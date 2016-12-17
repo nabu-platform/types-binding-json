@@ -240,6 +240,11 @@ public class JSONUnmarshaller {
 	private void unmarshalSingle(CountingReadableContainer<CharBuffer> readable, String fieldName, ComplexContent content, Integer index, boolean inDynamic) throws IOException, ParseException {
 		Object value = null;
 		Element<?> element = content == null ? null : content.getType().get(fieldName);
+		// check if it exists as an attribute
+		// this ensures compatibility with XML structures where fields may be expressed as attributes
+		if (element == null && content != null) {
+			element = content.getType().get("@" + fieldName);
+		}
 		// could be working with aliases
 		if (element != null) {
 			fieldName = element.getName();
