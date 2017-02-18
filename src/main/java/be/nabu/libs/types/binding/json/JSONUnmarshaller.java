@@ -53,6 +53,7 @@ public class JSONUnmarshaller {
 	
 	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, normalize = true, setEmptyArrays;
 	private boolean allowRawNames;
+	private boolean ignoreEmptyStrings;
 	
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	
@@ -354,6 +355,9 @@ public class JSONUnmarshaller {
 					buffer.write(IOUtils.wrap(delimited.getMatchedDelimiter()));
 				}
 		}
+		if (ignoreEmptyStrings && value instanceof String && ((String) value).isEmpty()) {
+			value = null;
+		}
 		if (value != null) {
 			boolean isKeyValuePair = false;
 			// if there is no element, let's see if you have a catch all keyvaluepair list
@@ -577,6 +581,14 @@ public class JSONUnmarshaller {
 
 	public void setSetEmptyArrays(boolean setEmptyArrays) {
 		this.setEmptyArrays = setEmptyArrays;
+	}
+
+	public boolean isIgnoreEmptyStrings() {
+		return ignoreEmptyStrings;
+	}
+
+	public void setIgnoreEmptyStrings(boolean ignoreEmptyStrings) {
+		this.ignoreEmptyStrings = ignoreEmptyStrings;
 	}
 
 }

@@ -13,16 +13,19 @@ import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.api.ReadableResource;
 import be.nabu.libs.types.CollectionHandlerFactory;
 import be.nabu.libs.types.ComplexContentWrapperFactory;
+import be.nabu.libs.types.SimpleTypeWrapperFactory;
 import be.nabu.libs.types.TypeUtils;
 import be.nabu.libs.types.api.CollectionHandler;
 import be.nabu.libs.types.api.CollectionHandlerProvider;
 import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
+import be.nabu.libs.types.api.DefinedSimpleType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.Marshallable;
 import be.nabu.libs.types.api.ModifiableComplexTypeGenerator;
 import be.nabu.libs.types.binding.BaseTypeBinding;
 import be.nabu.libs.types.binding.api.Window;
+import be.nabu.libs.types.java.BeanType;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.CharBuffer;
 import be.nabu.utils.io.api.ReadableContainer;
@@ -33,7 +36,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private CollectionHandler collectionHandler = CollectionHandlerFactory.getInstance().getHandler();
 	private ComplexType type;
 	
-	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, parseNumbers, allowRaw, setEmptyArrays;
+	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, parseNumbers, allowRaw, setEmptyArrays, ignoreEmptyStrings;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
 	private boolean prettyPrint;
@@ -206,42 +209,60 @@ public class JSONBinding extends BaseTypeBinding {
 		writer.write("}");
 	}
 	
-	@SuppressWarnings({ "unchecked", "rawtypes" })
+	@SuppressWarnings({ "unchecked" })
 	private void marshal(Writer writer, Object value, Element<?> element, int depth) throws IOException {
 		if (value == null) {
 			writer.write("null");
 		}
 		else if (element.getType() instanceof ComplexType) {
-			if (!(value instanceof ComplexContent)) {
-				Object converted = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(value);
-				if (converted == null) {
-					throw new ClassCastException("Can not convert " + value + " in " + element.getParent() + " to a complex content");
-				}
-				else {
-					value = converted;
+			Marshallable<?> marshallable = null;
+			// if we have an object, check if it is not secretly a simple type
+			if (element.getType() instanceof BeanType && ((BeanType<?>) element.getType()).getBeanClass().equals(Object.class)) {
+				DefinedSimpleType<? extends Object> wrap = SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(value.getClass());
+				if (wrap != null) {
+					marshallable = (Marshallable<?>) wrap;
 				}
 			}
-			marshal(writer, (ComplexContent) value, depth + 1, element.getProperties());
+			if (marshallable != null) {
+				marshalSimpleValue(writer, value, (Marshallable<?>) marshallable);
+			}
+			else {
+				if (!(value instanceof ComplexContent)) {
+					Object converted = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(value);
+					if (converted == null) {
+						throw new ClassCastException("Can not convert " + value + " in " + element.getParent() + " to a complex content");
+					}
+					else {
+						value = converted;
+					}
+				}
+				marshal(writer, (ComplexContent) value, depth + 1, element.getProperties());
+			}
 		}
 		else {
-			if (value instanceof Boolean || value instanceof Number) {
-				writer.write(value.toString());
+			marshalSimpleValue(writer, value, (Marshallable<?>) element.getType(), element.getProperties());
+		}
+	}
+
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	private void marshalSimpleValue(Writer writer, Object value, Marshallable type, Value<?>...properties) throws IOException {
+		if (value instanceof Boolean || value instanceof Number) {
+			writer.write(value.toString());
+		}
+		// everything else has to be stringified
+		else {
+			String marshalledValue = type.marshal(value, properties);
+			if (!allowRaw) {
+				// escape
+				marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
+					.replace("\n", "\\n").replaceAll("\r", "").replace("\t", "\\t").replace("/", "\\/");
 			}
-			// everything else has to be stringified
+			// even in raw mode, we need to escape some stuff
 			else {
-				String marshalledValue = ((Marshallable) element.getType()).marshal(value, element.getProperties());
-				if (!allowRaw) {
-					// escape
-					marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
-						.replace("\n", "\\n").replaceAll("\r", "").replace("\t", "\\t").replace("/", "\\/");
-				}
-				// even in raw mode, we need to escape some stuff
-				else {
-					marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
-							.replace("\n", "\\n").replaceAll("\r", "");
-				}
-				writer.write("\"" + marshalledValue + "\"");
+				marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
+						.replace("\n", "\\n").replaceAll("\r", "");
 			}
+			writer.write("\"" + marshalledValue + "\"");
 		}
 	}
 	
@@ -259,6 +280,7 @@ public class JSONBinding extends BaseTypeBinding {
 		jsonUnmarshaller.setParseNumbers(parseNumbers);
 		jsonUnmarshaller.setAllowRawNames(allowRaw);
 		jsonUnmarshaller.setSetEmptyArrays(setEmptyArrays);
+		jsonUnmarshaller.setIgnoreEmptyStrings(ignoreEmptyStrings);
 		return jsonUnmarshaller.unmarshal(readable, type);
 	}
 
@@ -349,4 +371,13 @@ public class JSONBinding extends BaseTypeBinding {
 	public void setSetEmptyArrays(boolean setEmptyArrays) {
 		this.setEmptyArrays = setEmptyArrays;
 	}
+
+	public boolean isIgnoreEmptyStrings() {
+		return ignoreEmptyStrings;
+	}
+
+	public void setIgnoreEmptyStrings(boolean ignoreEmptyStrings) {
+		this.ignoreEmptyStrings = ignoreEmptyStrings;
+	}
+	
 }
