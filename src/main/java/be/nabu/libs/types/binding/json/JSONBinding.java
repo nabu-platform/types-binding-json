@@ -11,6 +11,7 @@ import java.util.Map;
 
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.api.ReadableResource;
+import be.nabu.libs.types.BaseTypeInstance;
 import be.nabu.libs.types.CollectionHandlerFactory;
 import be.nabu.libs.types.ComplexContentWrapperFactory;
 import be.nabu.libs.types.SimpleTypeWrapperFactory;
@@ -21,10 +22,14 @@ import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedSimpleType;
 import be.nabu.libs.types.api.Element;
+import be.nabu.libs.types.api.KeyValuePair;
 import be.nabu.libs.types.api.Marshallable;
 import be.nabu.libs.types.api.ModifiableComplexTypeGenerator;
+import be.nabu.libs.types.api.TypeInstance;
+import be.nabu.libs.types.base.SimpleElementImpl;
 import be.nabu.libs.types.binding.BaseTypeBinding;
 import be.nabu.libs.types.binding.api.Window;
+import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.java.BeanType;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.CharBuffer;
@@ -36,7 +41,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private CollectionHandler collectionHandler = CollectionHandlerFactory.getInstance().getHandler();
 	private ComplexType type;
 	
-	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, parseNumbers, allowRaw, setEmptyArrays, ignoreEmptyStrings;
+	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, parseNumbers, allowRaw, setEmptyArrays, ignoreEmptyStrings, expandKeyValuePairs;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
 	private boolean prettyPrint;
@@ -113,6 +118,7 @@ public class JSONBinding extends BaseTypeBinding {
 		if (content.getType() == null) {
 			throw new NullPointerException("No complex type found for: " + content.getClass().getName());
 		}
+		TypeInstance keyValueInstance = new BaseTypeInstance(BeanResolver.getInstance().resolve(KeyValuePair.class));
 		for (Element<?> element : TypeUtils.getAllChildren((ComplexType) content.getType())) {
 			Object value = content.get(element.getName());
 			if (element.getType().isList(element.getProperties())) {
@@ -152,35 +158,57 @@ public class JSONBinding extends BaseTypeBinding {
 					}
 					else {
 						CollectionHandlerProvider handler = collectionHandler.getHandler(value.getClass());
-						if (prettyPrint) {
-							printDepth(writer, depth + 1);
-						}
-						writer.write("\"" + element.getName() + "\": [");
-						boolean hasContent = false;
-						for (Object child : handler.getAsIterable(value)) {
-							if (prettyPrint && !hasContent) {
-								hasContent = true;
-								writer.write("\n");
-							}
-							if (isFirstChild) {
-								isFirstChild = false;
-							}
-							else {
-								writer.write(", ");
+						if (expandKeyValuePairs && TypeUtils.isSubset(new BaseTypeInstance(element.getType()), keyValueInstance)) {
+							boolean isFirstKeyValuePair = true;
+							for (Object child : handler.getAsIterable(value)) {
+								if (isFirstKeyValuePair) {
+									isFirstKeyValuePair = false;
+								}
+								else {
+									writer.write(", ");
+									if (prettyPrint) {
+										writer.write("\n");
+									}
+								}
 								if (prettyPrint) {
+									printDepth(writer, depth + 1);
+								}
+								writer.write("\"" + ((KeyValuePair) child).getKey() + "\": ");
+								Element expectedElement = new SimpleElementImpl(((KeyValuePair) child).getKey(), SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), (ComplexType) content.getType());
+								marshal(writer, ((KeyValuePair) child).getValue(), expectedElement, depth + 1);
+							}
+						}
+						else {
+							if (prettyPrint) {
+								printDepth(writer, depth + 1);
+							}
+							writer.write("\"" + element.getName() + "\": [");
+							boolean hasContent = false;
+							for (Object child : handler.getAsIterable(value)) {
+								if (prettyPrint && !hasContent) {
+									hasContent = true;
 									writer.write("\n");
 								}
+								if (isFirstChild) {
+									isFirstChild = false;
+								}
+								else {
+									writer.write(", ");
+									if (prettyPrint) {
+										writer.write("\n");
+									}
+								}
+								if (prettyPrint) {
+									printDepth(writer, depth + 2);
+								}
+								marshal(writer, child, element, depth + 1);
 							}
-							if (prettyPrint) {
-								printDepth(writer, depth + 2);
+							if (prettyPrint && hasContent) {
+								writer.write("\n");
+								printDepth(writer, depth + 1);
 							}
-							marshal(writer, child, element, depth + 1);
+							writer.write("]");
 						}
-						if (prettyPrint && hasContent) {
-							writer.write("\n");
-							printDepth(writer, depth + 1);
-						}
-						writer.write("]");
 					}
 				}
 			}
@@ -379,5 +407,13 @@ public class JSONBinding extends BaseTypeBinding {
 	public void setIgnoreEmptyStrings(boolean ignoreEmptyStrings) {
 		this.ignoreEmptyStrings = ignoreEmptyStrings;
 	}
-	
+
+	public boolean isExpandKeyValuePairs() {
+		return expandKeyValuePairs;
+	}
+
+	public void setExpandKeyValuePairs(boolean expandKeyValuePairs) {
+		this.expandKeyValuePairs = expandKeyValuePairs;
+	}
+
 }

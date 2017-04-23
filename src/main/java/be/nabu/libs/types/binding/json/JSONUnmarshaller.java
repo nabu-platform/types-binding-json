@@ -91,7 +91,7 @@ public class JSONUnmarshaller {
 							break;
 						}
 						else {
-							unmarshalSingle(readable, element.getName(), instance, index++, false);
+							unmarshalSingle(readable, element.getName(), instance, index++, false, element.getName());
 						}
 						if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
 							throw new IOException("Can not get the next character");
@@ -150,6 +150,7 @@ public class JSONUnmarshaller {
 				delimited = IOUtils.delimit(IOUtils.limitReadable(IOUtils.chain(false, IOUtils.wrap(single, true), readable), LOOK_AHEAD), "[\\s]*:$", 2);
 			}
 			String fieldName = IOUtils.toString(delimited);
+			String rawFieldName = fieldName;
 			if (!allowRawNames) {
 				fieldName = preprocess(encodeFieldName(unescape(fieldName)));
 			}
@@ -181,7 +182,7 @@ public class JSONUnmarshaller {
 						break;
 					}
 					else {
-						unmarshalSingle(readable, fieldName, content, index++, inDynamic);
+						unmarshalSingle(readable, fieldName, content, index++, inDynamic, rawFieldName);
 					}
 					if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
 						throw new IOException("Can not get the next character");
@@ -200,7 +201,7 @@ public class JSONUnmarshaller {
 				}
 			}
 			else {
-				unmarshalSingle(readable, fieldName, content, null, inDynamic);
+				unmarshalSingle(readable, fieldName, content, null, inDynamic, rawFieldName);
 			}
 			// it has to be a ',' or a '}'
 			if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
@@ -238,7 +239,7 @@ public class JSONUnmarshaller {
 	}
 
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	private void unmarshalSingle(CountingReadableContainer<CharBuffer> readable, String fieldName, ComplexContent content, Integer index, boolean inDynamic) throws IOException, ParseException {
+	private void unmarshalSingle(CountingReadableContainer<CharBuffer> readable, String fieldName, ComplexContent content, Integer index, boolean inDynamic, String rawFieldName) throws IOException, ParseException {
 		Object value = null;
 		Element<?> element = content == null ? null : content.getType().get(fieldName);
 		// check if it exists as an attribute
@@ -393,7 +394,7 @@ public class JSONUnmarshaller {
 			}
 			if (content != null && element != null) {
 				if (isKeyValuePair) {
-					String key = fieldName;
+					String key = rawFieldName;
 					if (index != null) {
 						key += "[" + index + "]";
 					}
