@@ -362,7 +362,7 @@ public class JSONUnmarshaller {
 		if (value != null) {
 			boolean isKeyValuePair = false;
 			// if there is no element, let's see if you have a catch all keyvaluepair list
-			if (element == null || dynamicToKeyValue) {
+			if (content != null && (element == null || dynamicToKeyValue)) {
 				TypeInstance keyValueInstance = new BaseTypeInstance(BeanResolver.getInstance().resolve(KeyValuePair.class));
 				for (Element<?> child : TypeUtils.getAllChildren(content.getType())) {
 					// apart from it being a list, other child properties don't matter so strip them for subset comparison 
