@@ -147,7 +147,7 @@ public class JSONBinding extends BaseTypeBinding {
 								writer.write("\n");
 								printDepth(writer, depth + 1);
 							}
-							writer.write("\"" + key.toString() + "\": ");
+							writer.write("\"" + key + "\": ");
 							marshal(writer, ((Map) value).get(key), element, depth);
 						}
 						if (prettyPrint) {
