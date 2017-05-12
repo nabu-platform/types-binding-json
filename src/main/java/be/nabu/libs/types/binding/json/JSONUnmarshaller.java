@@ -30,6 +30,7 @@ import be.nabu.libs.types.base.SimpleElementImpl;
 import be.nabu.libs.types.base.ValueImpl;
 import be.nabu.libs.types.binding.BindingUtils;
 import be.nabu.libs.types.java.BeanResolver;
+import be.nabu.libs.types.java.BeanType;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.CharBuffer;
@@ -242,6 +243,7 @@ public class JSONUnmarshaller {
 	private void unmarshalSingle(CountingReadableContainer<CharBuffer> readable, String fieldName, ComplexContent content, Integer index, boolean inDynamic, String rawFieldName) throws IOException, ParseException {
 		Object value = null;
 		Element<?> element = content == null ? null : content.getType().get(fieldName);
+		
 		// check if it exists as an attribute
 		// this ensures compatibility with XML structures where fields may be expressed as attributes
 		if (element == null && content != null) {
@@ -255,8 +257,11 @@ public class JSONUnmarshaller {
 		boolean dynamicToKeyValue = false;
 		switch(single[0]) {
 			case '{':
+				// if we have an Object, we want dynamic behavior to kick in, an object can't really do much
 				// if we allow dynamic elements, create one
-				if (allowDynamicElements && element == null && complexTypeGenerator != null) {
+				if (allowDynamicElements && complexTypeGenerator != null && (element == null || (element.getType() instanceof BeanType && ((BeanType<?>) element.getType()).getBeanClass().equals(Object.class)))) {
+					// if we get here the element is either null or a java.lang.Object
+					boolean isObject = element != null;
 					if (index == null) {
 						element = new ComplexElementImpl(fieldName, complexTypeGenerator.newComplexType(), content.getType());
 					}
@@ -267,7 +272,9 @@ public class JSONUnmarshaller {
 						((ModifiableComplexType) content.getType()).add(element);
 					}
 					else if (!inDynamic) {
-						dynamicToKeyValue = true;
+						// only set this to true if we didn't start out with a java.lang.Object
+						// if we did start out that way, we can simply reuse the existing field to put the dynamic stuff in
+						dynamicToKeyValue = !isObject;
 					}
 					inDynamic = true;
 				}
@@ -374,7 +381,7 @@ public class JSONUnmarshaller {
 				}
 			}
 			// must be a simple value
-			if (!ignoreUnknownElements && allowDynamicElements && element == null) {
+			if ((!ignoreUnknownElements || inDynamic) && allowDynamicElements && element == null) {
 				DefinedSimpleType<? extends Object> wrap = SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(value.getClass());
 				if (wrap == null) {
 					throw new ParseException("Can not dynamically wrap: " + value, 0);
@@ -495,7 +502,7 @@ public class JSONUnmarshaller {
 		}
 	}
 	
-	private String unescape(String value) {
+	public static String unescape(String value) {
 		return value == null ? null : value.replaceAll("(?<!\\\\)\\\\n", "\n").replaceAll("(?<!\\\\)\\\\t", "\t").replace("\\\\", "\\").replace("\\\"", "\"").replace("\\/", "/");
 	}
 	
