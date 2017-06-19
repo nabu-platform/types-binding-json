@@ -182,6 +182,34 @@ public class JSONUnmarshaller {
 					if (single[0] == ']') {
 						break;
 					}
+					// matrix, only 2 deep atm...
+					else if (single[0] == '[') {
+						while(true) {
+							if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
+								throw new IOException("Can not get the next character");
+							}
+							// empty
+							if (single[0] == ']') {
+								break;
+							}
+							else if (single[0] == '[') {
+								throw new ParseException("Matrices are only supported 2 deep currently", 0);
+							}
+							else {
+								unmarshalSingle(readable, fieldName, content, index++, inDynamic, rawFieldName);
+							}
+							if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
+								throw new IOException("Can not get the next character");
+							}
+							if (single[0] == ']') {
+								break;
+							}
+							// next
+							else if (single[0] != ',') {
+								throw new ParseException("Expecting a ',' to indicate the next part of the array or a ']' to indicate the end for field: " + fieldName, 0);
+							}
+						}
+					}
 					else {
 						unmarshalSingle(readable, fieldName, content, index++, inDynamic, rawFieldName);
 					}
@@ -193,7 +221,7 @@ public class JSONUnmarshaller {
 					}
 					// next
 					else if (single[0] != ',') {
-						throw new ParseException("Expecting a ',' to indicate the next part of the array or a ']' to indicate the end", 0);
+						throw new ParseException("Expecting a ',' to indicate the next part of the array or a ']' to indicate the end for field: " + fieldName, 0);
 					}
 				}
 				// no elements
