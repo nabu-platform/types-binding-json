@@ -466,7 +466,9 @@ public class JSONUnmarshaller {
 					}
 				}
 				else if (dynamicToKeyValue) {
-					throw new ParseException("Created a dynamic type for field '" + fieldName + "' but found no key value pair to map it to", 0);
+					if (!ignoreUnknownElements) {
+						throw new ParseException("Created a dynamic type for field '" + fieldName + "' but found no key value pair to map it to", 0);
+					}
 				}
 				else {
 					boolean isList = element.getType().isList(element.getProperties());
