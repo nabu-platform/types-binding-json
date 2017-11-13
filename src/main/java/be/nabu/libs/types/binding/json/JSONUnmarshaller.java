@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.URIUtils;
 import be.nabu.libs.types.BaseTypeInstance;
 import be.nabu.libs.types.CollectionHandlerFactory;
@@ -31,6 +32,7 @@ import be.nabu.libs.types.base.ValueImpl;
 import be.nabu.libs.types.binding.BindingUtils;
 import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.java.BeanType;
+import be.nabu.libs.types.properties.AliasProperty;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.CharBuffer;
@@ -206,7 +208,7 @@ public class JSONUnmarshaller {
 							}
 							// next
 							else if (single[0] != ',') {
-								throw new ParseException("Expecting a ',' to indicate the next part of the array or a ']' to indicate the end for field: " + fieldName, 0);
+								throw new ParseException("Expecting a ',' to indicate the next part of the array or a ']' to indicate the end for field: " + rawFieldName, 0);
 							}
 						}
 					}
@@ -221,12 +223,18 @@ public class JSONUnmarshaller {
 					}
 					// next
 					else if (single[0] != ',') {
-						throw new ParseException("Expecting a ',' to indicate the next part of the array or a ']' to indicate the end for field: " + fieldName, 0);
+						throw new ParseException("Expecting a ',' to indicate the next part of the array or a ']' to indicate the end for field: " + rawFieldName, 0);
 					}
 				}
 				// no elements
-				if (index == 0 && setEmptyArrays) {
-					content.set(fieldName, new ArrayList<Object>());
+				if (index == 0 && setEmptyArrays && content != null) {
+					Element<?> element = getRawChild(content.getType(), rawFieldName);
+					if (element == null) {
+						element = content.getType().get(fieldName);
+					}
+					if (element != null) {
+						content.set(element.getName(), new ArrayList<Object>());
+					}
 				}
 			}
 			else {
@@ -266,17 +274,41 @@ public class JSONUnmarshaller {
 		}
 		return name;
 	}
+	
+	private Element<?> getRawChild(ComplexType type, String name) {
+		for (Element<?> child : TypeUtils.getAllChildren(type)) {
+			if (child.getName().equals(name)) {
+				return child;
+			}
+			Value<String> property = child.getProperty(AliasProperty.getInstance());
+			if (property != null && property.getValue() != null && property.getValue().equals(name)) {
+				return child;
+			}
+		}
+		return null;
+	}
 
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	private void unmarshalSingle(CountingReadableContainer<CharBuffer> readable, String fieldName, ComplexContent content, Integer index, boolean inDynamic, String rawFieldName) throws IOException, ParseException {
 		Object value = null;
-		Element<?> element = content == null ? null : content.getType().get(fieldName);
 		
-		// check if it exists as an attribute
-		// this ensures compatibility with XML structures where fields may be expressed as attributes
-		if (element == null && content != null) {
-			element = content.getType().get("@" + fieldName);
+		Element<?> element = null;
+		
+		if (content != null) {
+			element = getRawChild(content.getType(), rawFieldName);
+			if (element == null) {
+				element = content.getType().get(fieldName);
+			}
+			// check if it exists as an attribute
+			// this ensures compatibility with XML structures where fields may be expressed as attributes
+			if (element == null) {
+				element = getRawChild(content.getType(), "@" + rawFieldName);
+			}
+			if (element == null) {
+				element = content.getType().get("@" + fieldName);
+			}
 		}
+		
 		// could be working with aliases
 		if (element != null) {
 			fieldName = element.getName();
@@ -425,7 +457,7 @@ public class JSONUnmarshaller {
 				}
 			}
 			if (!ignoreUnknownElements && element == null) {
-				throw new ParseException("The field " + fieldName + " is unexpected at this position", 0);
+				throw new ParseException("The field " + rawFieldName + " is unexpected at this position", 0);
 			}
 			if (content != null && element != null) {
 				if (isKeyValuePair) {
@@ -467,7 +499,7 @@ public class JSONUnmarshaller {
 				}
 				else if (dynamicToKeyValue) {
 					if (!ignoreUnknownElements) {
-						throw new ParseException("Created a dynamic type for field '" + fieldName + "' but found no key value pair to map it to", 0);
+						throw new ParseException("Created a dynamic type for field '" + rawFieldName + "' but found no key value pair to map it to", 0);
 					}
 				}
 				else {

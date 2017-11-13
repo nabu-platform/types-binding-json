@@ -31,6 +31,7 @@ import be.nabu.libs.types.binding.BaseTypeBinding;
 import be.nabu.libs.types.binding.api.Window;
 import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.java.BeanType;
+import be.nabu.libs.types.properties.AliasProperty;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.CharBuffer;
 import be.nabu.utils.io.api.ReadableContainer;
@@ -41,7 +42,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private CollectionHandler collectionHandler = CollectionHandlerFactory.getInstance().getHandler();
 	private ComplexType type;
 	
-	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, parseNumbers, allowRaw, setEmptyArrays, ignoreEmptyStrings, expandKeyValuePairs;
+	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, parseNumbers, allowRaw, setEmptyArrays, ignoreEmptyStrings, expandKeyValuePairs, useAlias = true;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
 	private boolean prettyPrint;
@@ -121,6 +122,7 @@ public class JSONBinding extends BaseTypeBinding {
 		TypeInstance keyValueInstance = new BaseTypeInstance(BeanResolver.getInstance().resolve(KeyValuePair.class));
 		for (Element<?> element : TypeUtils.getAllChildren((ComplexType) content.getType())) {
 			Object value = content.get(element.getName());
+			Value<String> alias = useAlias ? element.getProperty(AliasProperty.getInstance()) : null;
 			if (element.getType().isList(element.getProperties())) {
 				// only write the list if the value is not null or we explicitly enable the "writeEmptyLists" boolean
 				if (value != null) {
@@ -135,7 +137,7 @@ public class JSONBinding extends BaseTypeBinding {
 					}
 					boolean isFirstChild = true;
 					if (value instanceof Map) {
-						writer.write("\"" + element.getName() + "\": {");
+						writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": {");
 						for (Object key : ((Map) value).keySet()) {
 							if (isFirstChild) {
 								isFirstChild = false;
@@ -173,16 +175,21 @@ public class JSONBinding extends BaseTypeBinding {
 								if (prettyPrint) {
 									printDepth(writer, depth + 1);
 								}
-								writer.write("\"" + ((KeyValuePair) child).getKey() + "\": ");
-								Element expectedElement = new SimpleElementImpl(((KeyValuePair) child).getKey(), SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), (ComplexType) content.getType());
-								marshal(writer, ((KeyValuePair) child).getValue(), expectedElement, depth + 1);
+								if (!(child instanceof ComplexContent)) {
+									child = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(child);
+								}
+								String propertyKey = (String) ((ComplexContent) child).get("key");
+								String propertyValue = (String) ((ComplexContent) child).get("value");
+								writer.write("\"" + propertyKey + "\": ");
+								Element expectedElement = new SimpleElementImpl(propertyKey, SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), (ComplexType) content.getType());
+								marshal(writer, propertyValue, expectedElement, depth + 1);
 							}
 						}
 						else {
 							if (prettyPrint) {
 								printDepth(writer, depth + 1);
 							}
-							writer.write("\"" + element.getName() + "\": [");
+							writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": [");
 							boolean hasContent = false;
 							for (Object child : handler.getAsIterable(value)) {
 								if (prettyPrint && !hasContent) {
@@ -226,7 +233,7 @@ public class JSONBinding extends BaseTypeBinding {
 				if (prettyPrint) {
 					printDepth(writer, depth + 1);
 				}
-				writer.write("\"" + element.getName() + "\": ");
+				writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": ");
 				marshal(writer, value, element, depth);
 			}
 		}
@@ -414,6 +421,14 @@ public class JSONBinding extends BaseTypeBinding {
 
 	public void setExpandKeyValuePairs(boolean expandKeyValuePairs) {
 		this.expandKeyValuePairs = expandKeyValuePairs;
+	}
+
+	public boolean isUseAlias() {
+		return useAlias;
+	}
+
+	public void setUseAlias(boolean useAlias) {
+		this.useAlias = useAlias;
 	}
 
 }
