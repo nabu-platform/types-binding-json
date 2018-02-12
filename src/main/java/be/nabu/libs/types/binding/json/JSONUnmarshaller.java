@@ -397,7 +397,7 @@ public class JSONUnmarshaller {
 				}
 				// must be a number then...
 				else {
-					delimited = IOUtils.delimit(readable, "[^0-9.E]+", 1);
+					delimited = IOUtils.delimit(readable, "[^0-9.E+-]+", 1);
 					value = single[0] + IOUtils.toString(delimited);
 					if (parseNumbers) {
 						try {
