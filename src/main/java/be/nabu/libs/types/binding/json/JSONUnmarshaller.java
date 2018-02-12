@@ -235,6 +235,10 @@ public class JSONUnmarshaller {
 					if (element != null) {
 						content.set(element.getName(), new ArrayList<Object>());
 					}
+					// if we allow dynamic elements, set an empty array for the field
+					else if (allowDynamicElements) {
+						content.set(allowRawNames ? rawFieldName : fieldName, new ArrayList<Object>());
+					}
 				}
 			}
 			else {
