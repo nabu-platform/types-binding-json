@@ -286,7 +286,7 @@ public class JSONBinding extends BaseTypeBinding {
 		}
 		// everything else has to be stringified
 		else {
-			String marshalledValue = type.marshal(value, properties);
+			String marshalledValue = value instanceof String ? (String) value : type.marshal(value, properties);
 			if (!allowRaw) {
 				// escape
 				marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
