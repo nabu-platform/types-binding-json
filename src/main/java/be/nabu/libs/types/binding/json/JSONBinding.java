@@ -295,7 +295,7 @@ public class JSONBinding extends BaseTypeBinding {
 			// even in raw mode, we need to escape some stuff
 			else {
 				marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
-						.replace("\n", "\\n").replaceAll("\r", "");
+						.replace("\n", "\\n").replaceAll("\r", "").replace("\t", "\\t");
 			}
 			writer.write("\"" + marshalledValue + "\"");
 		}
