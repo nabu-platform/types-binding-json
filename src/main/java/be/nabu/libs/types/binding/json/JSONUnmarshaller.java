@@ -52,6 +52,9 @@ public class JSONUnmarshaller {
 	private static final int LOOK_AHEAD = 4096;
 	private static final int MAX_SIZE = 1024*1024*10;
 	
+	// do best effort if we can
+	private boolean lenient = true;
+	
 	private CharBuffer buffer = IOUtils.newCharBuffer(LOOK_AHEAD, true);
 	
 	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, normalize = true, setEmptyArrays;
@@ -332,6 +335,10 @@ public class JSONUnmarshaller {
 					else {
 						element = new ComplexElementImpl(fieldName, complexTypeGenerator.newComplexType(), content.getType(), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
 					}
+					// if we have a raw field name, add it to alias
+					if (!rawFieldName.equals(fieldName)) {
+						element.setProperty(new ValueImpl<String>(AliasProperty.getInstance(), rawFieldName));
+					}
 					if ((addDynamicElementDefinitions || inDynamic) && content.getType() instanceof ModifiableComplexType) {
 						((ModifiableComplexType) content.getType()).add(element);
 					}
@@ -456,6 +463,10 @@ public class JSONUnmarshaller {
 				else {
 					element = new SimpleElementImpl(fieldName, wrap, content.getType(), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
 				}
+				// if we have a raw field name, add it to alias
+				if (!rawFieldName.equals(fieldName)) {
+					element.setProperty(new ValueImpl<String>(AliasProperty.getInstance(), rawFieldName));
+				}
 				if ((addDynamicElementDefinitions || inDynamic) && content.getType() instanceof ModifiableComplexType) {
 					((ModifiableComplexType) content.getType()).add(element);
 				}
@@ -510,12 +521,26 @@ public class JSONUnmarshaller {
 					boolean isList = element.getType().isList(element.getProperties());
 					if (index != null) {
 						if (!isList) {
-							throw new ParseException("The element " + fieldName + " is an array in the json but not a list", 0);
+							// if we have more than one entry in the list, it will fail soon
+							if (lenient && index == 0) {
+								content.set(fieldName, value);
+							}
+							else {
+								throw new ParseException("The element " + fieldName + " is an array in the json but not a list", 0);
+							}
 						}
-						content.set(fieldName + "[" + index + "]", value);
+						else {
+							content.set(fieldName + "[" + index + "]", value);
+						}
 					}
 					else if (isList) {
-						throw new ParseException("The element " + fieldName + " is a list but not an array in the json", 0);
+						// if we are doing lenient parsing, we have a target list and a singular value, we just put it in the first element
+						if (lenient) {
+							content.set(fieldName + "[0]", value);	
+						}
+						else {
+							throw new ParseException("The element " + fieldName + " is a list but not an array in the json", 0);
+						}
 					}
 					else {
 						content.set(fieldName, value);
