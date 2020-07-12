@@ -26,6 +26,7 @@ import be.nabu.libs.types.api.KeyValuePair;
 import be.nabu.libs.types.api.ModifiableComplexType;
 import be.nabu.libs.types.api.ModifiableComplexTypeGenerator;
 import be.nabu.libs.types.api.TypeInstance;
+import be.nabu.libs.types.api.Unmarshallable;
 import be.nabu.libs.types.base.ComplexElementImpl;
 import be.nabu.libs.types.base.SimpleElementImpl;
 import be.nabu.libs.types.base.ValueImpl;
@@ -519,6 +520,11 @@ public class JSONUnmarshaller {
 				}
 				else {
 					boolean isList = element.getType().isList(element.getProperties());
+					// if we set a string value and the target type is different, it will go through "regular" conversion
+					// this is 99% compatible with specific unmarshallable, _except_ for bytes which go through a base64 decode
+					if (value instanceof String && element.getType() instanceof Unmarshallable) {
+						value = ((Unmarshallable) element.getType()).unmarshal((String) value, element.getProperties());
+					}
 					if (index != null) {
 						if (!isList) {
 							// if we have more than one entry in the list, it will fail soon
