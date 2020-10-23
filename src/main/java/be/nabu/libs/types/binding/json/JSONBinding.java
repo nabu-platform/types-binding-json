@@ -45,7 +45,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, parseNumbers, allowRaw, setEmptyArrays, ignoreEmptyStrings, expandKeyValuePairs, useAlias = true;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
-	private boolean prettyPrint;
+	private boolean prettyPrint, ignoreInconsistentTypes;
 	
 	public JSONBinding(ModifiableComplexTypeGenerator complexTypeGenerator, Charset charset) {
 		this(complexTypeGenerator.newComplexType(), charset);
@@ -79,8 +79,14 @@ public class JSONBinding extends BaseTypeBinding {
 					Object value = content.get(element.getName());
 					if (value != null) {
 						CollectionHandlerProvider handler = collectionHandler.getHandler(value.getClass());
+						if (handler != null) {
+							value = handler.getAsIterable(value);
+						}
+						else if (!(value instanceof Iterable)) {
+							throw new IllegalArgumentException("Can not find collection handler for " + value.getClass() + ": " + value);
+						}
 						boolean isFirst = true;
-						for (Object child : handler.getAsIterable(value)) {
+						for (Object child : (Iterable) value) {
 							if (isFirst) {
 								isFirst = false;
 							}
@@ -159,10 +165,17 @@ public class JSONBinding extends BaseTypeBinding {
 						writer.write("}");
 					}
 					else {
+						// we have to always use the collection handler, glue has "CollectionIterable" which _are_ iterables but also lazy
 						CollectionHandlerProvider handler = collectionHandler.getHandler(value.getClass());
+						if (handler != null) {
+							value = handler.getAsIterable(value);
+						}
+						else if (!(value instanceof Iterable)) {
+							throw new IllegalArgumentException("Can not find collection handler for " + value.getClass() + ": " + value);
+						}
 						if (expandKeyValuePairs && TypeUtils.isSubset(new BaseTypeInstance(element.getType()), keyValueInstance)) {
 							boolean isFirstKeyValuePair = true;
-							for (Object child : handler.getAsIterable(value)) {
+							for (Object child : (Iterable) value) {
 								if (isFirstKeyValuePair) {
 									isFirstKeyValuePair = false;
 								}
@@ -191,7 +204,7 @@ public class JSONBinding extends BaseTypeBinding {
 							}
 							writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": [");
 							boolean hasContent = false;
-							for (Object child : handler.getAsIterable(value)) {
+							for (Object child : (Iterable) value) {
 								if (prettyPrint && !hasContent) {
 									hasContent = true;
 									writer.write("\n");
@@ -305,6 +318,7 @@ public class JSONBinding extends BaseTypeBinding {
 	protected ComplexContent unmarshal(ReadableResource resource, Window[] windows, Value<?>... values) throws IOException, ParseException {
 		ReadableContainer<CharBuffer> readable = IOUtils.wrapReadable(resource.getReadable(), charset);
 		JSONUnmarshaller jsonUnmarshaller = new JSONUnmarshaller();
+		jsonUnmarshaller.setIgnoreInconsistentTypes(ignoreInconsistentTypes);
 		jsonUnmarshaller.setIgnoreRootIfArrayWrapper(ignoreRootIfArrayWrapper);
 		jsonUnmarshaller.setAddDynamicElementDefinitions(isAddDynamicElementDefinitions());
 		jsonUnmarshaller.setAllowDynamicElements(isAllowDynamicElements());
@@ -431,4 +445,11 @@ public class JSONBinding extends BaseTypeBinding {
 		this.useAlias = useAlias;
 	}
 
+	public boolean isIgnoreInconsistentTypes() {
+		return ignoreInconsistentTypes;
+	}
+
+	public void setIgnoreInconsistentTypes(boolean ignoreInconsistentTypes) {
+		this.ignoreInconsistentTypes = ignoreInconsistentTypes;
+	}
 }

@@ -68,6 +68,7 @@ public class JSONUnmarshaller {
 	private boolean strict;
 	private boolean decodeUnicode = true;
 	private boolean parseNumbers = false;
+	private boolean ignoreInconsistentTypes = false;
 	
 	@SuppressWarnings("unchecked")
 	public ComplexContent unmarshal(ReadableContainer<CharBuffer> reader, ComplexType type) throws IOException, ParseException {
@@ -327,7 +328,7 @@ public class JSONUnmarshaller {
 			case '{':
 				// if we have an Object, we want dynamic behavior to kick in, an object can't really do much
 				// if we allow dynamic elements, create one
-				if (allowDynamicElements && complexTypeGenerator != null && (element == null || (element.getType() instanceof BeanType && ((BeanType<?>) element.getType()).getBeanClass().equals(Object.class)))) {
+				if (allowDynamicElements && complexTypeGenerator != null && content != null && (element == null || (element.getType() instanceof BeanType && ((BeanType<?>) element.getType()).getBeanClass().equals(Object.class)))) {
 					// if we get here the element is either null or a java.lang.Object
 					boolean isObject = element != null;
 					if (index == null) {
@@ -350,11 +351,20 @@ public class JSONUnmarshaller {
 					}
 					inDynamic = true;
 				}
-				if (!ignoreUnknownElements && element == null) {
+				// if we already already in content=null scenario, we are past caring
+				if (!ignoreUnknownElements && element == null && content != null) {
 					throw new ParseException("The field " + fieldName + " is unexpected at this position", 0);
 				}
+				// sometimes people will use varying definitions for a type (sometimes string, sometimes complex type)
+				// currently the only usecase that we have encountered is swaggers, and then only in like the comment/freestyle section (which is less relevant anyway)
+				// so we offer the ability to...ignore it!
 				else if (element != null && !(element.getType() instanceof ComplexType)) {
-					throw new ParseException("The field " + fieldName + " is not a complex type", 0);
+					if (ignoreInconsistentTypes) {
+						element = null;
+					}
+					else {
+						throw new ParseException("The field " + fieldName + " is not a complex type", 0);
+					}
 				}
 				ComplexContent child = element == null ? null : ((ComplexType) element.getType()).newInstance();
 				// recursively parse
@@ -453,7 +463,7 @@ public class JSONUnmarshaller {
 				}
 			}
 			// must be a simple value
-			if ((!ignoreUnknownElements || inDynamic) && allowDynamicElements && element == null) {
+			if ((!ignoreUnknownElements || inDynamic) && allowDynamicElements && element == null && content != null) {
 				DefinedSimpleType<? extends Object> wrap = SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(value.getClass());
 				if (wrap == null) {
 					throw new ParseException("Can not dynamically wrap: " + value, 0);
@@ -472,7 +482,7 @@ public class JSONUnmarshaller {
 					((ModifiableComplexType) content.getType()).add(element);
 				}
 			}
-			if (!ignoreUnknownElements && element == null) {
+			if (!ignoreUnknownElements && element == null && content != null) {
 				throw new ParseException("The field " + rawFieldName + " is unexpected at this position", 0);
 			}
 			if (content != null && element != null) {
@@ -523,33 +533,45 @@ public class JSONUnmarshaller {
 					// if we set a string value and the target type is different, it will go through "regular" conversion
 					// this is 99% compatible with specific unmarshallable, _except_ for bytes which go through a base64 decode
 					if (value instanceof String && element.getType() instanceof Unmarshallable) {
-						value = ((Unmarshallable) element.getType()).unmarshal((String) value, element.getProperties());
-					}
-					if (index != null) {
-						if (!isList) {
-							// if we have more than one entry in the list, it will fail soon
-							if (lenient && index == 0) {
-								content.set(fieldName, value);
+						try {
+							value = ((Unmarshallable) element.getType()).unmarshal((String) value, element.getProperties());
+						}
+						catch (Exception e) {
+							if (ignoreInconsistentTypes) {
+								value = null;
 							}
 							else {
-								throw new ParseException("The element " + fieldName + " is an array in the json but not a list", 0);
+								throw new ParseException("Could not parse value " + value + " for element " + element.getName() + ": " + e.getMessage(), 0);
+							}
+						}
+					}
+					if (value != null) {
+						if (index != null) {
+							if (!isList) {
+								// if we have more than one entry in the list, it will fail soon
+								if (lenient && index == 0) {
+									content.set(fieldName, value);
+								}
+								else {
+									throw new ParseException("The element " + fieldName + " is an array in the json but not a list", 0);
+								}
+							}
+							else {
+								content.set(fieldName + "[" + index + "]", value);
+							}
+						}
+						else if (isList) {
+							// if we are doing lenient parsing, we have a target list and a singular value, we just put it in the first element
+							if (lenient) {
+								content.set(fieldName + "[0]", value);	
+							}
+							else {
+								throw new ParseException("The element " + fieldName + " is a list but not an array in the json", 0);
 							}
 						}
 						else {
-							content.set(fieldName + "[" + index + "]", value);
+							content.set(fieldName, value);
 						}
-					}
-					else if (isList) {
-						// if we are doing lenient parsing, we have a target list and a singular value, we just put it in the first element
-						if (lenient) {
-							content.set(fieldName + "[0]", value);	
-						}
-						else {
-							throw new ParseException("The element " + fieldName + " is a list but not an array in the json", 0);
-						}
-					}
-					else {
-						content.set(fieldName, value);
 					}
 				}
 			}
@@ -696,4 +718,11 @@ public class JSONUnmarshaller {
 		this.ignoreEmptyStrings = ignoreEmptyStrings;
 	}
 
+	public boolean isIgnoreInconsistentTypes() {
+		return ignoreInconsistentTypes;
+	}
+
+	public void setIgnoreInconsistentTypes(boolean ignoreInconsistentTypes) {
+		this.ignoreInconsistentTypes = ignoreInconsistentTypes;
+	}
 }
