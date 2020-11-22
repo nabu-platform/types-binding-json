@@ -25,6 +25,7 @@ import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.KeyValuePair;
 import be.nabu.libs.types.api.ModifiableComplexType;
 import be.nabu.libs.types.api.ModifiableComplexTypeGenerator;
+import be.nabu.libs.types.api.SimpleType;
 import be.nabu.libs.types.api.TypeInstance;
 import be.nabu.libs.types.api.Unmarshallable;
 import be.nabu.libs.types.base.ComplexElementImpl;
@@ -326,50 +327,73 @@ public class JSONUnmarshaller {
 		boolean dynamicToKeyValue = false;
 		switch(single[0]) {
 			case '{':
-				// if we have an Object, we want dynamic behavior to kick in, an object can't really do much
-				// if we allow dynamic elements, create one
-				if (allowDynamicElements && complexTypeGenerator != null && content != null && (element == null || (element.getType() instanceof BeanType && ((BeanType<?>) element.getType()).getBeanClass().equals(Object.class)))) {
-					// if we get here the element is either null or a java.lang.Object
-					boolean isObject = element != null;
-					if (index == null) {
-						element = new ComplexElementImpl(fieldName, complexTypeGenerator.newComplexType(), content.getType());
+				// if we have complex content and we are trying to assign to a string value, don't parse it further, just do depth counting and assign it all as a string
+				if (element != null && element.getType() instanceof SimpleType && String.class.equals(((SimpleType<?>) element.getType()).getInstanceClass())) {
+					// we start at depth 1 cause we have the opening bracket
+					int depth = 1;
+					StringBuilder result = new StringBuilder();
+					while (depth > 0) {
+						DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, LOOK_AHEAD), "}");
+						String fieldValue = IOUtils.toString(delimited);
+						if (!delimited.isDelimiterFound()) {
+							throw new ParseException("Could not find closing '}' for stringified field '" + element.getName() + "' within the allotted look ahead space", 0);
+						}
+						// increase depth if necessary
+						depth += fieldValue.length() - fieldValue.replace("{", "").length();
+						// we read until a closing } so take that into account
+						depth--;
+						// we re-append the stripped "}"
+						result.append(fieldValue).append("}");
 					}
-					else {
-						element = new ComplexElementImpl(fieldName, complexTypeGenerator.newComplexType(), content.getType(), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
-					}
-					// if we have a raw field name, add it to alias
-					if (!rawFieldName.equals(fieldName)) {
-						element.setProperty(new ValueImpl<String>(AliasProperty.getInstance(), rawFieldName));
-					}
-					if ((addDynamicElementDefinitions || inDynamic) && content.getType() instanceof ModifiableComplexType) {
-						((ModifiableComplexType) content.getType()).add(element);
-					}
-					else if (!inDynamic) {
-						// only set this to true if we didn't start out with a java.lang.Object
-						// if we did start out that way, we can simply reuse the existing field to put the dynamic stuff in
-						dynamicToKeyValue = !isObject;
-					}
-					inDynamic = true;
+					// we also reappend the initial opening { that led us down this path
+					value = "{" + result.toString();
 				}
-				// if we already already in content=null scenario, we are past caring
-				if (!ignoreUnknownElements && element == null && content != null) {
-					throw new ParseException("The field " + fieldName + " is unexpected at this position", 0);
-				}
-				// sometimes people will use varying definitions for a type (sometimes string, sometimes complex type)
-				// currently the only usecase that we have encountered is swaggers, and then only in like the comment/freestyle section (which is less relevant anyway)
-				// so we offer the ability to...ignore it!
-				else if (element != null && !(element.getType() instanceof ComplexType)) {
-					if (ignoreInconsistentTypes) {
-						element = null;
+				else {
+					// if we have an Object, we want dynamic behavior to kick in, an object can't really do much
+					// if we allow dynamic elements, create one
+					if (allowDynamicElements && complexTypeGenerator != null && content != null && (element == null || (element.getType() instanceof BeanType && ((BeanType<?>) element.getType()).getBeanClass().equals(Object.class)))) {
+						// if we get here the element is either null or a java.lang.Object
+						boolean isObject = element != null;
+						if (index == null) {
+							element = new ComplexElementImpl(fieldName, complexTypeGenerator.newComplexType(), content.getType());
+						}
+						else {
+							element = new ComplexElementImpl(fieldName, complexTypeGenerator.newComplexType(), content.getType(), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
+						}
+						// if we have a raw field name, add it to alias
+						if (!rawFieldName.equals(fieldName)) {
+							element.setProperty(new ValueImpl<String>(AliasProperty.getInstance(), rawFieldName));
+						}
+						if ((addDynamicElementDefinitions || inDynamic) && content.getType() instanceof ModifiableComplexType) {
+							((ModifiableComplexType) content.getType()).add(element);
+						}
+						else if (!inDynamic) {
+							// only set this to true if we didn't start out with a java.lang.Object
+							// if we did start out that way, we can simply reuse the existing field to put the dynamic stuff in
+							dynamicToKeyValue = !isObject;
+						}
+						inDynamic = true;
 					}
-					else {
-						throw new ParseException("The field " + fieldName + " is not a complex type", 0);
+					// if we already already in content=null scenario, we are past caring
+					if (!ignoreUnknownElements && element == null && content != null) {
+						throw new ParseException("The field " + fieldName + " is unexpected at this position", 0);
 					}
+					// sometimes people will use varying definitions for a type (sometimes string, sometimes complex type)
+					// currently the only usecase that we have encountered is swaggers, and then only in like the comment/freestyle section (which is less relevant anyway)
+					// so we offer the ability to...ignore it!
+					else if (element != null && !(element.getType() instanceof ComplexType)) {
+						if (ignoreInconsistentTypes) {
+							element = null;
+						}
+						else {
+							throw new ParseException("The field " + fieldName + " is not a complex type", 0);
+						}
+					}
+					ComplexContent child = element == null ? null : ((ComplexType) element.getType()).newInstance();
+					// recursively parse
+					readField(readable, child, inDynamic);
+					value = child;
 				}
-				ComplexContent child = element == null ? null : ((ComplexType) element.getType()).newInstance();
-				// recursively parse
-				readField(readable, child, inDynamic);
-				value = child;
 			break;
 			case '"':
 				DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, MAX_SIZE), "[^\\\\]*\"$", 2);
