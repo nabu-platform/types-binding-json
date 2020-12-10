@@ -35,6 +35,7 @@ import be.nabu.libs.types.binding.BindingUtils;
 import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.java.BeanType;
 import be.nabu.libs.types.properties.AliasProperty;
+import be.nabu.libs.types.properties.DynamicNameProperty;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.CharBuffer;
@@ -349,6 +350,27 @@ public class JSONUnmarshaller {
 					value = "{" + result.toString();
 				}
 				else {
+					String dynamicKey = null;
+					// if we can't find an element by that name but we do find a list element which has a dynamic name property, we assume we can map it there
+					if (element == null) {
+						for (Element<?> potential : TypeUtils.getAllChildren(content.getType())) {
+							Value<String> dynamicName = potential.getProperty(DynamicNameProperty.getInstance());
+							if (dynamicName != null && dynamicName.getValue() != null && potential.getType() instanceof ComplexType && potential.getType().isList(potential.getProperties())) {
+								element = potential;
+								dynamicKey = dynamicName.getValue();
+								// we get the current element so we can get the index
+								Object object = content.get(element.getName());
+								if (object == null || !((Iterable) object).iterator().hasNext()) {
+									index = 0;
+								}
+								else {
+									index = ((List) object).size();
+								}
+								break;
+							}
+						}
+					}
+					
 					// if we have an Object, we want dynamic behavior to kick in, an object can't really do much
 					// if we allow dynamic elements, create one
 					if (allowDynamicElements && complexTypeGenerator != null && content != null && (element == null || (element.getType() instanceof BeanType && ((BeanType<?>) element.getType()).getBeanClass().equals(Object.class)))) {
@@ -374,6 +396,7 @@ public class JSONUnmarshaller {
 						}
 						inDynamic = true;
 					}
+					
 					// if we already already in content=null scenario, we are past caring
 					if (!ignoreUnknownElements && element == null && content != null) {
 						throw new ParseException("The field " + fieldName + " is unexpected at this position", 0);
@@ -389,10 +412,20 @@ public class JSONUnmarshaller {
 							throw new ParseException("The field " + fieldName + " is not a complex type", 0);
 						}
 					}
+					
 					ComplexContent child = element == null ? null : ((ComplexType) element.getType()).newInstance();
+					
+					// add the field name
+					if (dynamicKey != null) {
+						child.set(dynamicKey, fieldName);
+						// we must update the field name to match the element, but only after we log it in the instance
+						fieldName = element.getName();
+					}
+					
 					// recursively parse
 					readField(readable, child, inDynamic);
 					value = child;
+					
 				}
 			break;
 			case '"':
