@@ -9,6 +9,8 @@ import java.text.ParseException;
 import java.util.Collection;
 import java.util.Map;
 
+import be.nabu.libs.converter.ConverterFactory;
+import be.nabu.libs.property.ValueUtils;
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.api.ReadableResource;
 import be.nabu.libs.types.BaseTypeInstance;
@@ -32,6 +34,7 @@ import be.nabu.libs.types.binding.api.Window;
 import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.java.BeanType;
 import be.nabu.libs.types.properties.AliasProperty;
+import be.nabu.libs.types.properties.DynamicNameProperty;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.CharBuffer;
 import be.nabu.utils.io.api.ReadableContainer;
@@ -46,6 +49,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
 	private boolean prettyPrint, ignoreInconsistentTypes;
+	private boolean ignoreDynamicNames;
 	
 	public JSONBinding(ModifiableComplexTypeGenerator complexTypeGenerator, Charset charset) {
 		this(complexTypeGenerator.newComplexType(), charset);
@@ -125,8 +129,13 @@ public class JSONBinding extends BaseTypeBinding {
 		if (content.getType() == null) {
 			throw new NullPointerException("No complex type found for: " + content.getClass().getName());
 		}
+		String dynamicKey = ignoreDynamicNames ? null : ValueUtils.getValue(DynamicNameProperty.getInstance(), values);
 		TypeInstance keyValueInstance = new BaseTypeInstance(BeanResolver.getInstance().resolve(KeyValuePair.class));
 		for (Element<?> element : TypeUtils.getAllChildren((ComplexType) content.getType())) {
+			// by default we don't print the dynamic keys
+			if (dynamicKey != null && element.getName().equals(dynamicKey)) {
+				continue;
+			}
 			Object value = content.get(element.getName());
 			Value<String> alias = useAlias ? element.getProperty(AliasProperty.getInstance()) : null;
 			if (element.getType().isList(element.getProperties())) {
@@ -173,7 +182,38 @@ public class JSONBinding extends BaseTypeBinding {
 						else if (!(value instanceof Iterable)) {
 							throw new IllegalArgumentException("Can not find collection handler for " + value.getClass() + ": " + value);
 						}
-						if (expandKeyValuePairs && TypeUtils.isSubset(new BaseTypeInstance(element.getType()), keyValueInstance)) {
+						Value<String> dynamicName = ignoreDynamicNames ? null : element.getProperty(DynamicNameProperty.getInstance());
+						if (dynamicName != null && dynamicName.getValue() != null) {
+							boolean isFirstDynamic = true;
+							for (Object child : (Iterable) value) {
+								if (isFirstDynamic) {
+									isFirstDynamic = false;
+								}
+								else {
+									writer.write(", ");
+									if (prettyPrint) {
+										writer.write("\n");
+									}
+								}
+								if (prettyPrint) {
+									printDepth(writer, depth + 1);
+								}
+								if (!(child instanceof ComplexContent)) {
+									child = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(child);
+								}
+								if (child != null) {
+									Object key = ((ComplexContent) child).get(dynamicName.getValue());
+									if (key != null && !(key instanceof String)) {
+										key = ConverterFactory.getInstance().getConverter().convert(key, String.class);
+									}
+									if (key != null) {
+										writer.write("\"" + key + "\": ");
+										marshal(writer, (ComplexContent) child, depth + 1, element.getProperties());
+									}
+								}
+							}
+						}
+						else if (expandKeyValuePairs && TypeUtils.isSubset(new BaseTypeInstance(element.getType()), keyValueInstance)) {
 							boolean isFirstKeyValuePair = true;
 							for (Object child : (Iterable) value) {
 								if (isFirstKeyValuePair) {
@@ -452,4 +492,13 @@ public class JSONBinding extends BaseTypeBinding {
 	public void setIgnoreInconsistentTypes(boolean ignoreInconsistentTypes) {
 		this.ignoreInconsistentTypes = ignoreInconsistentTypes;
 	}
+
+	public boolean isIgnoreDynamicNames() {
+		return ignoreDynamicNames;
+	}
+
+	public void setIgnoreDynamicNames(boolean ignoreDynamicNames) {
+		this.ignoreDynamicNames = ignoreDynamicNames;
+	}
+
 }
