@@ -340,18 +340,69 @@ public class JSONBinding extends BaseTypeBinding {
 		// everything else has to be stringified
 		else {
 			String marshalledValue = value instanceof String ? (String) value : type.marshal(value, properties);
-			if (!allowRaw) {
-				// escape
-				marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
-					.replace("\n", "\\n").replaceAll("\r", "").replace("\t", "\\t").replace("/", "\\/");
-			}
-			// even in raw mode, we need to escape some stuff
-			else {
-				marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
-						.replace("\n", "\\n").replaceAll("\r", "").replace("\t", "\\t");
-			}
+			marshalledValue = escape(marshalledValue, allowRaw);
+//			if (!allowRaw) {
+//				// escape
+//				marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
+//					.replace("\n", "\\n").replaceAll("\r", "").replace("\t", "\\t").replace("/", "\\/");
+//			}
+//			// even in raw mode, we need to escape some stuff
+//			else {
+//				marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
+//						.replace("\n", "\\n").replaceAll("\r", "").replace("\t", "\\t");
+//			}
 			writer.write("\"" + marshalledValue + "\"");
 		}
+	}
+	
+	public static String escape(String content, boolean raw) {
+		StringBuilder builder = new StringBuilder();
+		char previous = 0;
+		for (int i = 0; i < content.length(); i++) {
+			char current = content.charAt(i);
+			switch(current) {
+				case '\\':
+				case '"':
+					builder.append('\\');
+					builder.append(current);
+				break;
+				// if we don't allow raw, escape this as well
+				// based on jettison, we also escape the forward slash if it follows an opening fishtag (html/xml shizzles)
+				case '/':
+					if (!raw || previous == '<') {
+						builder.append('\\');
+					}
+					builder.append(current);	
+				break;
+				case '\r':
+					builder.append("\\r");
+				break;
+				case '\n':
+					builder.append("\\n");
+				break;
+				case '\t':
+					builder.append("\\t");
+				break;
+				case '\b':
+					builder.append("\\b");
+				break;
+				case '\f':
+					builder.append("\\f");
+				break;
+				default:
+					// we must encode characters under 20, but anything below 32 is basically a control character
+					// the "interesting" control characters are already covered in the above
+					if (current < 32) {
+						String hex = "000" + Integer.toHexString(current);
+						builder.append("\\u" + hex.substring(hex.length() - 4));
+					}
+					else {
+						builder.append(current);
+					}
+			}
+			previous = current;
+		}
+		return builder.toString();
 	}
 	
 	@Override

@@ -679,7 +679,74 @@ public class JSONUnmarshaller {
 	}
 	
 	public static String unescape(String value) {
-		return value == null ? null : value.replaceAll("(?<!\\\\)\\\\n", "\n").replaceAll("(?<!\\\\)\\\\t", "\t").replace("\\\\", "\\").replace("\\\"", "\"").replace("\\/", "/");
+//		return value == null ? null : value.replaceAll("(?<!\\\\)\\\\n", "\n").replaceAll("(?<!\\\\)\\\\t", "\t").replace("\\\\", "\\").replace("\\\"", "\"").replace("\\/", "/");
+		return unescapeFull(value);
+	}
+	
+	public static String unescapeFull(String content) {
+		StringBuilder builder = new StringBuilder();
+		int i = 0;
+		// we don't go to the end cause we generally have to inspect the next char for unescaping
+		for (i = 0; i < content.length() - 1; i++) {
+			char current = content.charAt(i);
+			char next = content.charAt(i + 1);
+			switch(current) {
+				// if we have a slash, we don't want to be preceeded by another slash (for escaping)
+				// suppose we have \\n as actual string value, we'll see \ first, followed by \. well append a single \ and move i + 1
+				// so instead of encountering the second \, we'll find a n and simply add that, ending in \n which is what we want (rather than an actual linefeed!)
+				case '\\':
+					switch(next) {
+						case 'n':
+							builder.append('\n');
+							// skip one
+							i++;
+						break;
+						case 'r':
+							builder.append('\r');
+							i++;
+						break;
+						case 'b':
+							builder.append('\b');
+							i++;
+						break;
+						case 'f':
+							builder.append('\f');
+							i++;
+						break;	
+						case 't':
+							builder.append('\t');
+							i++;
+						break;
+						case '\\':
+						case '/':
+						case '"':
+							builder.append(next);
+							i++;
+						break;
+						// if we have an escaped hex value...
+						case 'u':
+							// the next is already + 1
+							// so suppose length == 10
+							// i == 4 (0-based)
+							// next: 5 (0-based)
+							// we want [6-9] (0-based)
+							// so from the i-perspective, we want 5 more spots
+							if (i < content.length() - 5) {
+								String hex = content.substring(i + 2, i + 6);
+								builder.append((char) Integer.parseInt(hex, 16));
+								i += 5;
+							}
+						break;
+					}
+				break;
+				default:
+					builder.append(current);
+			}
+		}
+		if (i < content.length()) {
+			builder.append(content.substring(i, i + 1));
+		}
+		return builder.toString();
 	}
 	
 	@SuppressWarnings("unchecked")
