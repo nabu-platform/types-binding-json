@@ -352,7 +352,7 @@ public class JSONUnmarshaller {
 				else {
 					String dynamicKey = null;
 					// if we can't find an element by that name but we do find a list element which has a dynamic name property, we assume we can map it there
-					if (element == null) {
+					if (element == null && content != null) {
 						for (Element<?> potential : TypeUtils.getAllChildren(content.getType())) {
 							Value<String> dynamicName = potential.getProperty(DynamicNameProperty.getInstance());
 							if (dynamicName != null && dynamicName.getValue() != null && potential.getType() instanceof ComplexType && potential.getType().isList(potential.getProperties())) {
