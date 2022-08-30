@@ -9,6 +9,8 @@ import java.text.ParseException;
 import java.util.Collection;
 import java.util.Map;
 
+import org.slf4j.LoggerFactory;
+
 import be.nabu.libs.converter.ConverterFactory;
 import be.nabu.libs.property.ValueUtils;
 import be.nabu.libs.property.api.Value;
@@ -35,6 +37,7 @@ import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.java.BeanType;
 import be.nabu.libs.types.properties.AliasProperty;
 import be.nabu.libs.types.properties.DynamicNameProperty;
+import be.nabu.libs.types.properties.MinOccursProperty;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.CharBuffer;
 import be.nabu.utils.io.api.ReadableContainer;
@@ -50,6 +53,8 @@ public class JSONBinding extends BaseTypeBinding {
 	private boolean ignoreRootIfArrayWrapper = false;
 	private boolean prettyPrint, ignoreInconsistentTypes;
 	private boolean ignoreDynamicNames;
+	private boolean allowNilCharacter;
+	private boolean marshalNonExistingRequiredFields = true;
 	
 	public JSONBinding(ModifiableComplexTypeGenerator complexTypeGenerator, Charset charset) {
 		this(complexTypeGenerator.newComplexType(), charset);
@@ -271,6 +276,24 @@ public class JSONBinding extends BaseTypeBinding {
 						}
 					}
 				}
+				else if (marshalNonExistingRequiredFields) {
+					Value<Integer> minOccurs = element.getProperty(MinOccursProperty.getInstance());
+					if (minOccurs == null || minOccurs.getValue() > 0) {
+						if (isFirst) {
+							isFirst = false;
+						}
+						else {
+							writer.write(", ");
+							if (prettyPrint) {
+								writer.write("\n");
+							}
+						}
+						if (prettyPrint) {
+							printDepth(writer, depth);
+						}
+						writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": []");
+					}
+				}
 			}
 			// only write a non-list value if it is not null
 			else if (value != null) {
@@ -289,6 +312,24 @@ public class JSONBinding extends BaseTypeBinding {
 				writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": ");
 				marshal(writer, value, element, depth);
 			}
+			else if (marshalNonExistingRequiredFields) {
+				Value<Integer> minOccurs = element.getProperty(MinOccursProperty.getInstance());
+				if (minOccurs == null || minOccurs.getValue() > 0) {
+					if (isFirst) {
+						isFirst = false;
+					}
+					else {
+						writer.write(", ");
+						if (prettyPrint) {
+							writer.write("\n");
+						}
+					}
+					if (prettyPrint) {
+						printDepth(writer, depth + 1);
+					}
+					writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": null");
+				}
+			}
 		}
 		if (prettyPrint) {
 			writer.write("\n");
@@ -299,36 +340,41 @@ public class JSONBinding extends BaseTypeBinding {
 	
 	@SuppressWarnings({ "unchecked" })
 	private void marshal(Writer writer, Object value, Element<?> element, int depth) throws IOException {
-		if (value == null) {
-			writer.write("null");
-		}
-		else if (element.getType() instanceof ComplexType) {
-			Marshallable<?> marshallable = null;
-			// if we have an object, check if it is not secretly a simple type
-			if (element.getType() instanceof BeanType && ((BeanType<?>) element.getType()).getBeanClass().equals(Object.class)) {
-				DefinedSimpleType<? extends Object> wrap = SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(value.getClass());
-				if (wrap != null) {
-					marshallable = (Marshallable<?>) wrap;
-				}
+		try {
+			if (value == null) {
+				writer.write("null");
 			}
-			if (marshallable != null) {
-				marshalSimpleValue(writer, value, (Marshallable<?>) marshallable);
+			else if (element.getType() instanceof ComplexType) {
+				Marshallable<?> marshallable = null;
+				// if we have an object, check if it is not secretly a simple type
+				if (element.getType() instanceof BeanType && ((BeanType<?>) element.getType()).getBeanClass().equals(Object.class)) {
+					DefinedSimpleType<? extends Object> wrap = SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(value.getClass());
+					if (wrap != null) {
+						marshallable = (Marshallable<?>) wrap;
+					}
+				}
+				if (marshallable != null) {
+					marshalSimpleValue(writer, value, (Marshallable<?>) marshallable);
+				}
+				else {
+					if (!(value instanceof ComplexContent)) {
+						Object converted = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(value);
+						if (converted == null) {
+							throw new ClassCastException("Can not convert " + value + " in " + element.getParent() + " to a complex content");
+						}
+						else {
+							value = converted;
+						}
+					}
+					marshal(writer, (ComplexContent) value, depth + 1, element.getProperties());
+				}
 			}
 			else {
-				if (!(value instanceof ComplexContent)) {
-					Object converted = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(value);
-					if (converted == null) {
-						throw new ClassCastException("Can not convert " + value + " in " + element.getParent() + " to a complex content");
-					}
-					else {
-						value = converted;
-					}
-				}
-				marshal(writer, (ComplexContent) value, depth + 1, element.getProperties());
+				marshalSimpleValue(writer, value, (Marshallable<?>) element.getType(), element.getProperties());
 			}
 		}
-		else {
-			marshalSimpleValue(writer, value, (Marshallable<?>) element.getType(), element.getProperties());
+		catch (RuntimeException e) {
+			throw new RuntimeException("Could not marshal element '" + element.getName() + "' with value: " + value, e);
 		}
 	}
 
@@ -340,7 +386,7 @@ public class JSONBinding extends BaseTypeBinding {
 		// everything else has to be stringified
 		else {
 			String marshalledValue = value instanceof String ? (String) value : type.marshal(value, properties);
-			marshalledValue = escape(marshalledValue, allowRaw);
+			marshalledValue = escape(marshalledValue, allowRaw, allowNilCharacter);
 //			if (!allowRaw) {
 //				// escape
 //				marshalledValue = marshalledValue.replace("\\", "\\\\").replace("\"", "\\\"")
@@ -355,7 +401,7 @@ public class JSONBinding extends BaseTypeBinding {
 		}
 	}
 	
-	public static String escape(String content, boolean raw) {
+	public static String escape(String content, boolean raw, boolean allowNilCharacter) {
 		StringBuilder builder = new StringBuilder();
 		char previous = 0;
 		for (int i = 0; i < content.length(); i++) {
@@ -392,7 +438,10 @@ public class JSONBinding extends BaseTypeBinding {
 				default:
 					// we must encode characters under 20, but anything below 32 is basically a control character
 					// the "interesting" control characters are already covered in the above
-					if (current < 32) {
+					if (current == 0 && !allowNilCharacter) {
+						LoggerFactory.getLogger(JSONBinding.class).warn("Skipping 0 byte in JSON content: " + content);
+					}
+					else if (current < 32) {
 						String hex = "000" + Integer.toHexString(current);
 						builder.append("\\u" + hex.substring(hex.length() - 4));
 					}

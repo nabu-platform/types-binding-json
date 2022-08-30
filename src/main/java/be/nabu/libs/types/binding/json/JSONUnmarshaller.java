@@ -69,6 +69,7 @@ public class JSONUnmarshaller {
 	private boolean ignoreRootIfArrayWrapper = false;
 	private boolean strict;
 	private boolean decodeUnicode = true;
+	private boolean allowNilUnicode = false;
 	private boolean parseNumbers = false;
 	private boolean ignoreInconsistentTypes = false;
 	
@@ -162,7 +163,7 @@ public class JSONUnmarshaller {
 			String fieldName = IOUtils.toString(delimited);
 			String rawFieldName = fieldName;
 			if (!allowRawNames) {
-				fieldName = preprocess(encodeFieldName(unescape(fieldName)));
+				fieldName = preprocess(encodeFieldName(unescape(fieldName, allowNilUnicode)));
 			}
 			if (!delimited.isDelimiterFound()) {
 				throw new ParseException("Could not find delimiter of tag name: " + fieldName, 0);
@@ -434,12 +435,21 @@ public class JSONUnmarshaller {
 				if (!delimited.isDelimiterFound()) {
 					throw new ParseException("Could not find the closing quote of the string value", 0);
 				}
-				fieldValue = unescape(fieldValue);
+				fieldValue = unescape(fieldValue, allowNilUnicode);
 				if (decodeUnicode) {
 					Pattern pattern = Pattern.compile("\\\\u([0-9a-f]{4})");
 					Matcher matcher = pattern.matcher(fieldValue);
 					while(matcher.find()) {
-						fieldValue = fieldValue.replace(matcher.group(), new String(new char [] { (char) Integer.parseInt(matcher.group(1), 16) }));
+						// unless explicitly toggled, we do not allow for 0 to be injected
+						// this can lead to odd scenarios because most c-based systems do not interact well with 0 in a string
+						// in particular for example XML parsing will fail, postgresql jdbc driver will fail etc
+						if (allowNilUnicode || !"0000".equals(matcher.group(1))) {
+							fieldValue = fieldValue.replace(matcher.group(), new String(new char [] { (char) Integer.parseInt(matcher.group(1), 16) }));
+						}
+						// instead we replace it, so it does not show up at all
+						else {
+							fieldValue = fieldValue.replace(matcher.group(), "");
+						}
 					}
 				}
 				value = fieldValue;
@@ -679,11 +689,15 @@ public class JSONUnmarshaller {
 	}
 	
 	public static String unescape(String value) {
-//		return value == null ? null : value.replaceAll("(?<!\\\\)\\\\n", "\n").replaceAll("(?<!\\\\)\\\\t", "\t").replace("\\\\", "\\").replace("\\\"", "\"").replace("\\/", "/");
-		return unescapeFull(value);
+		return unescape(value, false);
 	}
 	
-	public static String unescapeFull(String content) {
+	public static String unescape(String value, boolean allowNil) {
+//		return value == null ? null : value.replaceAll("(?<!\\\\)\\\\n", "\n").replaceAll("(?<!\\\\)\\\\t", "\t").replace("\\\\", "\\").replace("\\\"", "\"").replace("\\/", "/");
+		return unescapeFull(value, allowNil);
+	}
+	
+	public static String unescapeFull(String content, boolean allowNil) {
 		StringBuilder builder = new StringBuilder();
 		int i = 0;
 		// we don't go to the end cause we generally have to inspect the next char for unescaping
@@ -733,7 +747,10 @@ public class JSONUnmarshaller {
 							// so from the i-perspective, we want 5 more spots
 							if (i < content.length() - 5) {
 								String hex = content.substring(i + 2, i + 6);
-								builder.append((char) Integer.parseInt(hex, 16));
+								// if it is 0 and we don't allow that, we simply append nothing
+								if (allowNil || !hex.equals("0000")) {
+									builder.append((char) Integer.parseInt(hex, 16));
+								}
 								i += 5;
 							}
 						break;
