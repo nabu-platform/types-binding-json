@@ -1,6 +1,8 @@
 package be.nabu.libs.types.binding.json;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
@@ -27,6 +29,7 @@ import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedSimpleType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.KeyValuePair;
+import be.nabu.libs.types.api.MarshalException;
 import be.nabu.libs.types.api.Marshallable;
 import be.nabu.libs.types.api.ModifiableComplexTypeGenerator;
 import be.nabu.libs.types.api.TypeInstance;
@@ -38,7 +41,10 @@ import be.nabu.libs.types.java.BeanType;
 import be.nabu.libs.types.properties.AliasProperty;
 import be.nabu.libs.types.properties.DynamicNameProperty;
 import be.nabu.libs.types.properties.MinOccursProperty;
+import be.nabu.utils.codec.TranscoderUtils;
+import be.nabu.utils.codec.impl.Base64Encoder;
 import be.nabu.utils.io.IOUtils;
+import be.nabu.utils.io.api.ByteBuffer;
 import be.nabu.utils.io.api.CharBuffer;
 import be.nabu.utils.io.api.ReadableContainer;
 
@@ -55,6 +61,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private boolean ignoreDynamicNames;
 	private boolean allowNilCharacter;
 	private boolean marshalNonExistingRequiredFields = true;
+	private boolean marshalStreams = true;
 	
 	public JSONBinding(ModifiableComplexTypeGenerator complexTypeGenerator, Charset charset) {
 		this(complexTypeGenerator.newComplexType(), charset);
@@ -369,6 +376,20 @@ public class JSONBinding extends BaseTypeBinding {
 					marshal(writer, (ComplexContent) value, depth + 1, element.getProperties());
 				}
 			}
+			else if (!(element.getType() instanceof Marshallable)) {
+				if ((value instanceof InputStream && marshalStreams) || value instanceof byte[]) {
+					if (value instanceof byte[]) {
+						value = new ByteArrayInputStream((byte[]) value);
+					}
+					ReadableContainer<ByteBuffer> transcodedBytes = TranscoderUtils.transcodeBytes(IOUtils.wrap((InputStream) value), new Base64Encoder());
+					String marshalledValue = IOUtils.toString(IOUtils.wrapReadable(transcodedBytes, Charset.forName("ASCII")));
+					marshalledValue = escape(marshalledValue, allowRaw, allowNilCharacter);
+					writer.write("\"" + marshalledValue + "\"");
+				}
+				else {
+					throw new MarshalException("The simple value for " + value + " can not be marshalled");
+				}
+			}
 			else {
 				marshalSimpleValue(writer, value, (Marshallable<?>) element.getType(), element.getProperties());
 			}
@@ -599,6 +620,14 @@ public class JSONBinding extends BaseTypeBinding {
 
 	public void setIgnoreDynamicNames(boolean ignoreDynamicNames) {
 		this.ignoreDynamicNames = ignoreDynamicNames;
+	}
+
+	public boolean isMarshalNonExistingRequiredFields() {
+		return marshalNonExistingRequiredFields;
+	}
+
+	public void setMarshalNonExistingRequiredFields(boolean marshalNonExistingRequiredFields) {
+		this.marshalNonExistingRequiredFields = marshalNonExistingRequiredFields;
 	}
 
 }
