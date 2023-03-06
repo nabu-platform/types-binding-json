@@ -73,7 +73,7 @@ public class JSONUnmarshaller {
 	private boolean parseNumbers = false;
 	private boolean ignoreInconsistentTypes = false;
 	
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public ComplexContent unmarshal(ReadableContainer<CharBuffer> reader, ComplexType type) throws IOException, ParseException {
 		CountingReadableContainer<CharBuffer> readable = IOUtils.countReadable(reader);
 		if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
@@ -130,7 +130,22 @@ public class JSONUnmarshaller {
 				throw new ParseException("Expecting a { to open the complex type", 0);
 			}
 			else {
-				readable = IOUtils.countReadable(IOUtils.chain(false, IOUtils.wrap(single, true), readable));
+				// if we have an object of type Object.class and we don't have curly braces, we assume it's a primitive type like string etc
+				// we can wrap it in a plain type
+				if (type instanceof BeanType && ((BeanType<?>) type).getBeanClass().equals(Object.class) && complexTypeGenerator != null) {
+					// unmarshalSingle expects the first character in "single" variable, NOT back in the readable
+					readable = IOUtils.countReadable(readable);
+					// you can just send back a string, number, boolean,...
+					ModifiableComplexType newComplexType = complexTypeGenerator.newComplexType();
+					Class<?> nestedType = String.class;
+					newComplexType.add(new SimpleElementImpl(ComplexType.SIMPLE_TYPE_VALUE, SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(nestedType), newComplexType));
+					ComplexContent instance = newComplexType.newInstance();
+					unmarshalSingle(readable, ComplexType.SIMPLE_TYPE_VALUE, instance, null, false, null);
+					return instance;
+				}
+				else {
+					readable = IOUtils.countReadable(IOUtils.chain(false, IOUtils.wrap(single, true), readable));
+				}
 			}
 		}
 		ComplexContent instance = type.newInstance();
