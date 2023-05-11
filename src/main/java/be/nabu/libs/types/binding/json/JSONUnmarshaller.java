@@ -79,7 +79,17 @@ public class JSONUnmarshaller {
 		if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
 			return null;
 		}
-		if (single[0] == '[' && ignoreRootIfArrayWrapper) {
+		// there is only one valid value that starts with an "n" and it is -> null
+		if (single[0] == 'n') {
+			ignoreWhitespace(readable).read(buffer);
+			String string = new String(IOUtils.toChars(buffer));
+			if (!string.equals("ull")) {
+				throw new ParseException("Expecting null, received: n" + string, 0);
+			}
+			// empty instance or null?
+			return null;
+		}
+		else if (single[0] == '[' && ignoreRootIfArrayWrapper) {
 			Collection<Element<?>> allChildren = TypeUtils.getAllChildren(type);
 			if (allChildren.size() == 0 && allowDynamicElements && complexTypeGenerator != null) {
 				Element<?> element = new ComplexElementImpl("array", complexTypeGenerator.newComplexType(), type, new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
