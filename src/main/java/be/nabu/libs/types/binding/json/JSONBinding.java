@@ -40,6 +40,7 @@ import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.java.BeanType;
 import be.nabu.libs.types.properties.AliasProperty;
 import be.nabu.libs.types.properties.DynamicNameProperty;
+import be.nabu.libs.types.properties.MatrixProperty;
 import be.nabu.libs.types.properties.MinOccursProperty;
 import be.nabu.utils.codec.TranscoderUtils;
 import be.nabu.utils.codec.impl.Base64Encoder;
@@ -133,9 +134,13 @@ public class JSONBinding extends BaseTypeBinding {
 	
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	private void marshal(Writer writer, ComplexContent content, int depth, Value<?>...values) throws IOException {
-		writer.write("{");
-		if (prettyPrint) {
-			writer.write("\n");
+		// check if it's a matrix
+		Boolean matrix = ValueUtils.getValue(MatrixProperty.getInstance(), values);
+		if (matrix == null || !matrix) {
+			writer.write("{");
+			if (prettyPrint) {
+				writer.write("\n");
+			}
 		}
 		boolean isFirst = true;
 		if (content.getType() == null) {
@@ -254,7 +259,12 @@ public class JSONBinding extends BaseTypeBinding {
 							if (prettyPrint) {
 								printDepth(writer, depth + 1);
 							}
-							writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": [");
+							if (matrix != null && matrix) {
+								writer.write("[");
+							}
+							else {
+								writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": [");
+							}
 							boolean hasContent = false;
 							for (Object child : (Iterable) value) {
 								if (prettyPrint && !hasContent) {
@@ -316,7 +326,12 @@ public class JSONBinding extends BaseTypeBinding {
 				if (prettyPrint) {
 					printDepth(writer, depth + 1);
 				}
-				writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": ");
+				if (matrix != null && matrix) {
+					// do nothing?
+				}
+				else {
+					writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": ");
+				}
 				marshal(writer, value, element, depth);
 			}
 			else if (marshalNonExistingRequiredFields) {
@@ -334,17 +349,24 @@ public class JSONBinding extends BaseTypeBinding {
 					if (prettyPrint) {
 						printDepth(writer, depth + 1);
 					}
-					writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": null");
+					if (matrix != null && matrix) {
+						// do nothing?
+					}
+					else {
+						writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": null");
+					}
 				}
 			}
 		}
-		if (prettyPrint) {
-			writer.write("\n");
-			printDepth(writer, depth);
+		if (matrix == null || !matrix) {
+			if (prettyPrint) {
+				writer.write("\n");
+				printDepth(writer, depth);
+			}
+			writer.write("}");
 		}
-		writer.write("}");
 	}
-	
+
 	@SuppressWarnings({ "unchecked" })
 	private void marshal(Writer writer, Object value, Element<?> element, int depth) throws IOException {
 		try {

@@ -219,6 +219,7 @@ public class JSONUnmarshaller {
 					}
 					// matrix, only 2 deep atm...
 					else if (single[0] == '[') {
+						int depth = 1;
 						while(true) {
 							if (ignoreWhitespace(readable).read(IOUtils.wrap(single, false)) != 1) {
 								throw new IOException("Can not get the next character");
@@ -228,7 +229,8 @@ public class JSONUnmarshaller {
 								break;
 							}
 							else if (single[0] == '[') {
-								throw new ParseException("Matrices are only supported 2 deep currently", 0);
+								depth++;
+//								throw new ParseException("Matrices are only supported 2 deep currently", 0);
 							}
 							else {
 								unmarshalSingle(readable, fieldName, content, index++, inDynamic, rawFieldName);
@@ -237,7 +239,9 @@ public class JSONUnmarshaller {
 								throw new IOException("Can not get the next character");
 							}
 							if (single[0] == ']') {
-								break;
+								if (--depth == 0) {
+									break;
+								}
 							}
 							// next
 							else if (single[0] != ',') {
