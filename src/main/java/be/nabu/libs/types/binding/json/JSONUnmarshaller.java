@@ -453,7 +453,13 @@ public class JSONUnmarshaller {
 					}
 					
 					// recursively parse
-					readField(readable, child, inDynamic);
+					try {
+						readField(readable, child, inDynamic);
+					}
+					catch (ParseException e) {
+						System.err.println("Could not parse field '" + fieldName + "' (index: " + index + ")");
+						throw e;
+					}
 					value = child;
 					
 				}
@@ -511,7 +517,7 @@ public class JSONUnmarshaller {
 				}
 				// must be a number then...
 				else {
-					delimited = IOUtils.delimit(readable, "[^0-9.E+-]+", 1);
+					delimited = IOUtils.delimit(readable, "[^0-9.eE+-]+", 1);
 					value = single[0] + IOUtils.toString(delimited);
 					if (parseNumbers) {
 						try {
@@ -545,6 +551,36 @@ public class JSONUnmarshaller {
 			value = null;
 		}
 		if (value != null) {
+			// if we have a simple type and no element, first check if we have a dynamic key element with exactly one other field (no matter the name), we assume this is it
+			if (!(value instanceof ComplexContent) && element == null) {
+				for (Element<?> potential : TypeUtils.getAllChildren(content.getType())) {
+					Value<String> dynamicName = potential.getProperty(DynamicNameProperty.getInstance());
+					if (dynamicName != null && dynamicName.getValue() != null && potential.getType() instanceof ComplexType && potential.getType().isList(potential.getProperties())) {
+						List<Element<?>> allChildren = new ArrayList<Element<?>>(TypeUtils.getAllChildren((ComplexType) potential.getType()));
+						// if we have exactly 2 children (the key field and another field), we assume the other field is our match
+						if (allChildren.size() == 2) {
+							element = potential;
+							String dynamicKey = dynamicName.getValue();
+							// whatever the "other" field is, is the value field
+							String dynamicValue = allChildren.get(0).getName().equals(dynamicKey) ? allChildren.get(1).getName() : allChildren.get(0).getName(); 
+							// we get the current element so we can get the index
+							Object object = content.get(element.getName());
+							if (object == null || !((Iterable) object).iterator().hasNext()) {
+								index = 0;
+							}
+							else {
+								index = ((List) object).size();
+							}
+							ComplexContent newInstance = ((ComplexType) potential.getType()).newInstance();
+							newInstance.set(dynamicKey, fieldName);
+							newInstance.set(dynamicValue, value);
+							value = newInstance;
+							fieldName = element.getName();
+						}
+					}
+				}
+			}
+			
 			boolean isKeyValuePair = false;
 			// if there is no element, let's see if you have a catch all keyvaluepair list
 			if (content != null && (element == null || dynamicToKeyValue)) {
