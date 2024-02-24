@@ -552,7 +552,7 @@ public class JSONUnmarshaller {
 		}
 		if (value != null) {
 			// if we have a simple type and no element, first check if we have a dynamic key element with exactly one other field (no matter the name), we assume this is it
-			if (!(value instanceof ComplexContent) && element == null) {
+			if (!(value instanceof ComplexContent) && element == null && content != null) {
 				for (Element<?> potential : TypeUtils.getAllChildren(content.getType())) {
 					Value<String> dynamicName = potential.getProperty(DynamicNameProperty.getInstance());
 					if (dynamicName != null && dynamicName.getValue() != null && potential.getType() instanceof ComplexType && potential.getType().isList(potential.getProperties())) {
