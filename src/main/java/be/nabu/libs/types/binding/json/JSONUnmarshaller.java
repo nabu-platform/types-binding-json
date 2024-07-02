@@ -60,7 +60,8 @@ public class JSONUnmarshaller {
 	
 	private CharBuffer buffer = IOUtils.newCharBuffer(LOOK_AHEAD, true);
 	
-	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, normalize = true, setEmptyArrays;
+	// @2024-06-29 I updated setEmptyArrays to true so the parser (by default) better reflects the actual data coming in
+	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, normalize = true, setEmptyArrays = true;
 	private boolean allowRawNames;
 	private boolean ignoreEmptyStrings;
 	
@@ -273,9 +274,10 @@ public class JSONUnmarshaller {
 						content.set(element.getName(), new ArrayList<Object>());
 					}
 					// if we allow dynamic elements, set an empty array for the field
-					else if (allowDynamicElements) {
-						content.set(allowRawNames ? rawFieldName : fieldName, new ArrayList<Object>());
-					}
+					// @2024-07-01: when setting an element that does not exist, most implementations will throw an exception, it is unclear why this is here. until recently "setEmptyArrays" was false by default, now it is true which triggers this piece of code that has probably almost never been tested
+//					else if (allowDynamicElements) {
+//						content.set(allowRawNames ? rawFieldName : fieldName, new ArrayList<Object>());
+//					}
 				}
 			}
 			else {
@@ -354,6 +356,8 @@ public class JSONUnmarshaller {
 		if (element != null) {
 			fieldName = element.getName();
 		}
+		
+		boolean isExplicitNull = false;
 		
 		boolean dynamicToKeyValue = false;
 		switch(single[0]) {
@@ -513,6 +517,7 @@ public class JSONUnmarshaller {
 					if (!rest.equalsIgnoreCase("ull")) {
 						throw new ParseException("The value " + single[0] + rest + " is not valid", 0);
 					}
+					isExplicitNull = true;
 					value = null;
 				}
 				// must be a number then...
@@ -707,6 +712,10 @@ public class JSONUnmarshaller {
 					}
 				}
 			}
+		}
+		// we set it explicitly so it is marked as set, this allows us to differentiate between a missing value and an explicit "null" value (important for PATCH)
+		else if (isExplicitNull && element != null) {
+			content.set(fieldName, value);
 		}
 	}
 	
