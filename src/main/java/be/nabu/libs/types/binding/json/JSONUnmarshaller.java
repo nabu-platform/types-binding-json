@@ -64,6 +64,8 @@ public class JSONUnmarshaller {
 	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, normalize = true, setEmptyArrays = true;
 	private boolean allowRawNames;
 	private boolean ignoreEmptyStrings;
+	// if we add dynamic simple types, only use strings, this is useful for "inconsistent" typing where the first iteration might be a number but the second a string with non-numeric data
+	private boolean addDynamicStringsOnly;
 	
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	
@@ -601,7 +603,7 @@ public class JSONUnmarshaller {
 			}
 			// must be a simple value
 			if ((!ignoreUnknownElements || inDynamic) && allowDynamicElements && element == null && content != null) {
-				DefinedSimpleType<? extends Object> wrap = SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(value.getClass());
+				DefinedSimpleType<? extends Object> wrap = SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(addDynamicStringsOnly ? String.class : value.getClass());
 				if (wrap == null) {
 					throw new ParseException("Can not dynamically wrap: " + value, 0);
 				}
@@ -940,4 +942,13 @@ public class JSONUnmarshaller {
 	public void setIgnoreInconsistentTypes(boolean ignoreInconsistentTypes) {
 		this.ignoreInconsistentTypes = ignoreInconsistentTypes;
 	}
+
+	public boolean isAddDynamicStringsOnly() {
+		return addDynamicStringsOnly;
+	}
+
+	public void setAddDynamicStringsOnly(boolean addDynamicStringsOnly) {
+		this.addDynamicStringsOnly = addDynamicStringsOnly;
+	}
+	
 }

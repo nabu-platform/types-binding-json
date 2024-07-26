@@ -56,7 +56,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private ComplexType type;
 	
 	// @2024-06-29 I updated setEmptyArrays to true so the parser (by default) better reflects the actual data coming in
-	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, parseNumbers, allowRaw, setEmptyArrays = true, ignoreEmptyStrings, expandKeyValuePairs, useAlias = true;
+	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, parseNumbers, allowRaw, setEmptyArrays = true, ignoreEmptyStrings, expandKeyValuePairs, useAlias = true, addDynamicStringsOnly;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
 	private boolean prettyPrint, ignoreInconsistentTypes;
@@ -514,6 +514,7 @@ public class JSONBinding extends BaseTypeBinding {
 		jsonUnmarshaller.setAllowRawNames(allowRaw);
 		jsonUnmarshaller.setSetEmptyArrays(setEmptyArrays);
 		jsonUnmarshaller.setIgnoreEmptyStrings(ignoreEmptyStrings);
+		jsonUnmarshaller.setAddDynamicStringsOnly(addDynamicStringsOnly);
 		return jsonUnmarshaller.unmarshal(readable, type);
 	}
 
@@ -651,6 +652,14 @@ public class JSONBinding extends BaseTypeBinding {
 
 	public void setMarshalNonExistingRequiredFields(boolean marshalNonExistingRequiredFields) {
 		this.marshalNonExistingRequiredFields = marshalNonExistingRequiredFields;
+	}
+
+	public boolean isAddDynamicStringsOnly() {
+		return addDynamicStringsOnly;
+	}
+
+	public void setAddDynamicStringsOnly(boolean addDynamicStringsOnly) {
+		this.addDynamicStringsOnly = addDynamicStringsOnly;
 	}
 
 }
