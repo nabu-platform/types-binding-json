@@ -156,7 +156,14 @@ public class JSONBinding extends BaseTypeBinding {
 			}
 			Object value = content.get(element.getName());
 			Value<String> alias = useAlias ? element.getProperty(AliasProperty.getInstance()) : null;
-			if (element.getType().isList(element.getProperties())) {
+			// @2024-08-12: we only checked if the element itself was a list, however a singular object value might still represent a list at runtime
+			// e.g. in the diff routines in CDM
+			boolean isList = element.getType().isList(element.getProperties());
+			boolean isObject = element.getType() instanceof BeanType && ((BeanType) element.getType()).getBeanClass().equals(java.lang.Object.class);
+			if (isObject && !isList) {
+				isList = value != null && (value instanceof Map || collectionHandler.getHandler(value.getClass()) != null);
+			}
+			if (isList) {
 				// only write the list if the value is not null or we explicitly enable the "writeEmptyLists" boolean
 				if (value != null) {
 					if (isFirst) {
