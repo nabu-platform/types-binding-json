@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import be.nabu.libs.property.ValueUtils;
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.URIUtils;
 import be.nabu.libs.types.BaseTypeInstance;
@@ -36,6 +37,7 @@ import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.java.BeanType;
 import be.nabu.libs.types.properties.AliasProperty;
 import be.nabu.libs.types.properties.DynamicNameProperty;
+import be.nabu.libs.types.properties.MaxLengthProperty;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.CharBuffer;
@@ -52,7 +54,7 @@ public class JSONUnmarshaller {
 	
 	private char [] single = new char[1];
 	
-	private static final int LOOK_AHEAD = 4096;
+	private static final int LOOK_AHEAD = 4096 * 2;
 	private static final int MAX_SIZE = 1024*1024*10;
 	
 	// do best effort if we can
@@ -369,8 +371,9 @@ public class JSONUnmarshaller {
 					// we start at depth 1 cause we have the opening bracket
 					int depth = 1;
 					StringBuilder result = new StringBuilder();
+					Integer maxLength = ValueUtils.getValue(MaxLengthProperty.getInstance(), element.getProperties());
 					while (depth > 0) {
-						DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, LOOK_AHEAD), "}");
+						DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, maxLength != null && maxLength > 0 ? maxLength : LOOK_AHEAD), "}");
 						String fieldValue = IOUtils.toString(delimited);
 						if (!delimited.isDelimiterFound()) {
 							throw new ParseException("Could not find closing '}' for stringified field '" + element.getName() + "' within the allotted look ahead space", 0);
