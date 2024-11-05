@@ -35,5 +35,10 @@
 			<groupId>be.nabu.libs.types</groupId>
 			<artifactId>types-java</artifactId>
 		</dependency>
+		<!-- needed for dynamic parsing -->
+		<dependency>
+			<groupId>be.nabu.libs.types</groupId>
+			<artifactId>types-map</artifactId>
+		</dependency>
 	</dependencies>
 </project>

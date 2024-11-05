@@ -54,7 +54,7 @@ public class JSONUnmarshaller {
 	
 	private char [] single = new char[1];
 	
-	private static final int LOOK_AHEAD = 4096 * 2;
+	private static final int LOOK_AHEAD = 4096;
 	private static final int MAX_SIZE = 1024*1024*10;
 	
 	// do best effort if we can
@@ -295,7 +295,7 @@ public class JSONUnmarshaller {
 				break;
 			}
 			else if (single[0] != ',') {
-				throw new ParseException("Expecting a ',' at this position, not " + single[0], (int) readable.getReadTotal());
+				throw new ParseException("Expecting a ',' at this position, not '" + single[0] + "' at position " + (int) readable.getReadTotal(), (int) readable.getReadTotal());
 			}
 		}
 	}
@@ -372,8 +372,13 @@ public class JSONUnmarshaller {
 					int depth = 1;
 					StringBuilder result = new StringBuilder();
 					Integer maxLength = ValueUtils.getValue(MaxLengthProperty.getInstance(), element.getProperties());
+					if (maxLength == null) {
+						maxLength = MAX_SIZE;
+					}
+					// subtract 1 for the opening curly brace! ;)
+					maxLength--;
 					while (depth > 0) {
-						DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, maxLength != null && maxLength > 0 ? maxLength : LOOK_AHEAD), "}");
+						DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, maxLength - result.length()), "}");
 						String fieldValue = IOUtils.toString(delimited);
 						if (!delimited.isDelimiterFound()) {
 							throw new ParseException("Could not find closing '}' for stringified field '" + element.getName() + "' within the allotted look ahead space", 0);
@@ -474,7 +479,8 @@ public class JSONUnmarshaller {
 				}
 			break;
 			case '"':
-				DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, MAX_SIZE), "[^\\\\]*\"$", 2);
+//				DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, MAX_SIZE), "[^\\\\]*\"$", 2);
+				DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, MAX_SIZE), "\"", '\\');
 				String fieldValue = IOUtils.toString(delimited);
 				if (!delimited.isDelimiterFound()) {
 					throw new ParseException("Could not find the closing quote of the string value", 0);
@@ -953,5 +959,13 @@ public class JSONUnmarshaller {
 	public void setAddDynamicStringsOnly(boolean addDynamicStringsOnly) {
 		this.addDynamicStringsOnly = addDynamicStringsOnly;
 	}
-	
+
+	public boolean isAllowNilUnicode() {
+		return allowNilUnicode;
+	}
+
+	public void setAllowNilUnicode(boolean allowNilUnicode) {
+		this.allowNilUnicode = allowNilUnicode;
+	}
+
 }

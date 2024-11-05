@@ -522,6 +522,7 @@ public class JSONBinding extends BaseTypeBinding {
 		jsonUnmarshaller.setSetEmptyArrays(setEmptyArrays);
 		jsonUnmarshaller.setIgnoreEmptyStrings(ignoreEmptyStrings);
 		jsonUnmarshaller.setAddDynamicStringsOnly(addDynamicStringsOnly);
+		jsonUnmarshaller.setAllowNilUnicode(allowNilCharacter);
 		return jsonUnmarshaller.unmarshal(readable, type);
 	}
 
@@ -667,6 +668,14 @@ public class JSONBinding extends BaseTypeBinding {
 
 	public void setAddDynamicStringsOnly(boolean addDynamicStringsOnly) {
 		this.addDynamicStringsOnly = addDynamicStringsOnly;
+	}
+
+	public boolean isAllowNilCharacter() {
+		return allowNilCharacter;
+	}
+
+	public void setAllowNilCharacter(boolean allowNilCharacter) {
+		this.allowNilCharacter = allowNilCharacter;
 	}
 
 }
