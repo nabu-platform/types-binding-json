@@ -629,7 +629,8 @@ public class JSONUnmarshaller {
 			}
 			// must be a simple value
 			if ((!ignoreUnknownElements || inDynamic) && allowDynamicElements && element == null && content != null) {
-				DefinedSimpleType<? extends Object> wrap = SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(addDynamicStringsOnly ? String.class : value.getClass());
+				Class<? extends Object> clazz = addDynamicStringsOnly ? String.class : value.getClass();
+				DefinedSimpleType<? extends Object> wrap = SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(clazz);
 				if (wrap == null) {
 					throw new ParseException("Can not dynamically wrap: " + value, 0);
 				}
