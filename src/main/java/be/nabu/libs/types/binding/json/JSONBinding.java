@@ -505,9 +505,9 @@ public class JSONBinding extends BaseTypeBinding {
 				break;
 				default:
 					// we must encode characters under 20, but anything below 32 is basically a control character
-					// the "interesting" control characters are already covered in the above
+					// the "interesting" control characters are already covered in the above. in the past we logged the content as well, but this is often binary data which is detrimental to logging
 					if (current == 0 && !allowNilCharacter) {
-						LoggerFactory.getLogger(JSONBinding.class).warn("Skipping 0 byte in JSON content: " + content);
+						LoggerFactory.getLogger(JSONBinding.class).warn("Skipping 0 byte in JSON content");
 					}
 					else if (current < 32) {
 						String hex = "000" + Integer.toHexString(current);
