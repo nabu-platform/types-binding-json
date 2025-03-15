@@ -59,6 +59,7 @@ import be.nabu.libs.types.properties.AliasProperty;
 import be.nabu.libs.types.properties.DynamicNameProperty;
 import be.nabu.libs.types.properties.MatrixProperty;
 import be.nabu.libs.types.properties.MinOccursProperty;
+import be.nabu.libs.types.properties.RawProperty;
 import be.nabu.utils.codec.TranscoderUtils;
 import be.nabu.utils.codec.impl.Base64Encoder;
 import be.nabu.utils.io.IOUtils;
@@ -438,7 +439,13 @@ public class JSONBinding extends BaseTypeBinding {
 				}
 			}
 			else {
-				marshalSimpleValue(writer, value, (Marshallable<?>) element.getType(), element.getProperties());
+				Value<Boolean> raw = element.getProperty(RawProperty.getInstance());
+				if (raw != null && raw.getValue()) {
+					writer.write(value.toString());
+				}
+				else {
+					marshalSimpleValue(writer, value, (Marshallable<?>) element.getType(), element.getProperties());
+				}
 			}
 		}
 		catch (RuntimeException e) {
