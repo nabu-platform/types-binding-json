@@ -75,6 +75,9 @@ public class JSONBinding extends BaseTypeBinding {
 	
 	// @2024-06-29 I updated setEmptyArrays to true so the parser (by default) better reflects the actual data coming in
 	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, parseNumbers, allowRaw, setEmptyArrays = true, ignoreEmptyStrings, expandKeyValuePairs, useAlias = true, addDynamicStringsOnly;
+	// @2025-05-12 we have a usecase where an element in swagger is defined first as "@id", then another element "id". because the swagger parser is working without a fixed definition, when looking for "id", it can't find the definition of course at which point the fallback to "@id" becomes problematic
+	// there are good usecases where we _dont_ want the fallback, however it is set to true by default for legacy reasons
+	private boolean allowAttributeFallback = true;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
 	private boolean prettyPrint, ignoreInconsistentTypes;
@@ -533,6 +536,7 @@ public class JSONBinding extends BaseTypeBinding {
 	protected ComplexContent unmarshal(ReadableResource resource, Window[] windows, Value<?>... values) throws IOException, ParseException {
 		ReadableContainer<CharBuffer> readable = IOUtils.wrapReadable(resource.getReadable(), charset);
 		JSONUnmarshaller jsonUnmarshaller = new JSONUnmarshaller();
+		jsonUnmarshaller.setAllowAttributeFallback(allowAttributeFallback);
 		jsonUnmarshaller.setIgnoreInconsistentTypes(ignoreInconsistentTypes);
 		jsonUnmarshaller.setIgnoreRootIfArrayWrapper(ignoreRootIfArrayWrapper);
 		jsonUnmarshaller.setAddDynamicElementDefinitions(isAddDynamicElementDefinitions());
@@ -700,6 +704,14 @@ public class JSONBinding extends BaseTypeBinding {
 
 	public void setAllowNilCharacter(boolean allowNilCharacter) {
 		this.allowNilCharacter = allowNilCharacter;
+	}
+
+	public boolean isAllowAttributeFallback() {
+		return allowAttributeFallback;
+	}
+
+	public void setAllowAttributeFallback(boolean allowAttributeFallback) {
+		this.allowAttributeFallback = allowAttributeFallback;
 	}
 
 }

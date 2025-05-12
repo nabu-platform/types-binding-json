@@ -81,6 +81,7 @@ public class JSONUnmarshaller {
 	
 	// @2024-06-29 I updated setEmptyArrays to true so the parser (by default) better reflects the actual data coming in
 	private boolean allowDynamicElements, addDynamicElementDefinitions, ignoreUnknownElements, camelCaseDashes, camelCaseUnderscores, normalize = true, setEmptyArrays = true;
+	private boolean allowAttributeFallback = true;
 	private boolean allowRawNames;
 	private boolean ignoreEmptyStrings;
 	// if we add dynamic simple types, only use strings, this is useful for "inconsistent" typing where the first iteration might be a number but the second a string with non-numeric data
@@ -365,11 +366,13 @@ public class JSONUnmarshaller {
 			}
 			// check if it exists as an attribute
 			// this ensures compatibility with XML structures where fields may be expressed as attributes
-			if (element == null) {
-				element = getRawChild(content.getType(), "@" + rawFieldName);
-			}
-			if (element == null) {
-				element = content.getType().get("@" + fieldName);
+			if (element == null && allowAttributeFallback) {
+				if (element == null) {
+					element = getRawChild(content.getType(), "@" + rawFieldName);
+				}
+				if (element == null) {
+					element = content.getType().get("@" + fieldName);
+				}
 			}
 		}
 		
@@ -986,4 +989,11 @@ public class JSONUnmarshaller {
 		this.allowNilUnicode = allowNilUnicode;
 	}
 
+	public boolean isAllowAttributeFallback() {
+		return allowAttributeFallback;
+	}
+
+	public void setAllowAttributeFallback(boolean allowAttributeFallback) {
+		this.allowAttributeFallback = allowAttributeFallback;
+	}
 }
