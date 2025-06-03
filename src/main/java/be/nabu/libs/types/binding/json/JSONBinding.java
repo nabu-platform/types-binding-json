@@ -84,6 +84,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private boolean ignoreDynamicNames;
 	private boolean allowNilCharacter;
 	private boolean marshalNonExistingRequiredFields = true;
+	private boolean marshalExplicitNullValues = false; 
 	private boolean marshalStreams = true;
 	
 	public JSONBinding(ModifiableComplexTypeGenerator complexTypeGenerator, Charset charset) {
@@ -176,6 +177,8 @@ public class JSONBinding extends BaseTypeBinding {
 				continue;
 			}
 			Object value = content.get(element.getName());
+			// check if we have an explicitly set value, if so we might _want_ to convey null values even for optional fields (e.g. for a PATCH)
+			boolean hasExplicitValueToSet = value != null || (marshalExplicitNullValues && content.has(element.getName()));
 			Value<String> alias = useAlias ? element.getProperty(AliasProperty.getInstance()) : null;
 			// @2024-08-12: we only checked if the element itself was a list, however a singular object value might still represent a list at runtime
 			// e.g. in the diff routines in CDM
@@ -184,6 +187,8 @@ public class JSONBinding extends BaseTypeBinding {
 			if (isObject && !isList) {
 				isList = value != null && (value instanceof Map || collectionHandler.getHandler(value.getClass()) != null);
 			}
+			// TODO: @2025-05-28: I added the "hasExplicitValue" boolean to allow writing null values for optional fields _if_ they are set explicitly
+			// we likely need to make a similar change for lists but let's wait for an actual usecase
 			if (isList) {
 				// only write the list if the value is not null or we explicitly enable the "writeEmptyLists" boolean
 				if (value != null) {
@@ -341,8 +346,8 @@ public class JSONBinding extends BaseTypeBinding {
 					}
 				}
 			}
-			// only write a non-list value if it is not null
-			else if (value != null) {
+			// only write a non-list value if it is not null or the null was explicitly set by the user
+			else if (hasExplicitValueToSet) {
 				if (isFirst) {
 					isFirst = false;
 				}
@@ -712,6 +717,14 @@ public class JSONBinding extends BaseTypeBinding {
 
 	public void setAllowAttributeFallback(boolean allowAttributeFallback) {
 		this.allowAttributeFallback = allowAttributeFallback;
+	}
+
+	public boolean isMarshalExplicitNullValues() {
+		return marshalExplicitNullValues;
+	}
+
+	public void setMarshalExplicitNullValues(boolean marshalExplicitNullValues) {
+		this.marshalExplicitNullValues = marshalExplicitNullValues;
 	}
 
 }
