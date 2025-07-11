@@ -216,7 +216,36 @@ public class JSONBinding extends BaseTypeBinding {
 								printDepth(writer, depth + 1);
 							}
 							writer.write("\"" + key + "\": ");
-							marshal(writer, ((Map) value).get(key), element, depth);
+							Object childValue = ((Map) value).get(key);
+							// it's a collection, iterate
+							CollectionHandlerProvider handler = childValue == null ? null : collectionHandler.getHandler(childValue.getClass());
+							// we have list!
+							if (handler != null) {
+								boolean isFirstChildValue = true;
+								writer.write("[");
+								childValue = childValue instanceof Iterable ? childValue : handler.getAsIterable(childValue);
+								for (Object childValueChild : (Iterable) childValue) {
+									if (isFirstChildValue) {
+										isFirstChildValue = false;
+									}
+									else {
+										writer.write(", ");
+									}
+									if (prettyPrint) {
+										writer.write("\n");
+										printDepth(writer, depth + 2);
+									}
+									marshal(writer, childValueChild, element, depth + 1);	
+								}
+								if (prettyPrint) {
+									writer.write("\n");
+									printDepth(writer, depth + 1);
+								}
+								writer.write("]");
+							}
+							else {
+								marshal(writer, childValue, element, depth);
+							}
 						}
 						if (prettyPrint) {
 							writer.write("\n");
