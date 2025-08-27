@@ -500,7 +500,11 @@ public class JSONUnmarshaller {
 			break;
 			case '"':
 //				DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, MAX_SIZE), "[^\\\\]*\"$", 2);
-				DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, MAX_SIZE), "\"", '\\');
+				Integer maxLength = element == null ? null : ValueUtils.getValue(MaxLengthProperty.getInstance(), element.getProperties());
+				if (maxLength == null) {
+					maxLength = MAX_SIZE;
+				}
+				DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, maxLength), "\"", '\\');
 				String fieldValue = IOUtils.toString(delimited);
 				if (!delimited.isDelimiterFound()) {
 					throw new ParseException("Could not find the closing quote of the string value", 0);
@@ -746,8 +750,33 @@ public class JSONUnmarshaller {
 			}
 		}
 		// we set it explicitly so it is marked as set, this allows us to differentiate between a missing value and an explicit "null" value (important for PATCH)
-		else if (isExplicitNull && element != null) {
-			content.set(fieldName, value);
+		else if (isExplicitNull) {
+			// if there is no element for it, check if we want to create it dynamically
+			if (!ignoreUnknownElements && element == null && allowDynamicElements) {
+				// we assume it's a string...?
+				Class<? extends Object> clazz = String.class;
+				DefinedSimpleType<? extends Object> wrap = SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(clazz);
+				if (wrap == null) {
+					throw new ParseException("Can not dynamically wrap: " + value, 0);
+				}
+				else if (index == null) {
+					element = new SimpleElementImpl(fieldName, wrap, content.getType());
+				}
+				else {
+					element = new SimpleElementImpl(fieldName, wrap, content.getType(), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
+				}
+				// if we have a raw field name, add it to alias
+				if (!rawFieldName.equals(fieldName)) {
+					element.setProperty(new ValueImpl<String>(AliasProperty.getInstance(), rawFieldName));
+				}
+				if ((addDynamicElementDefinitions || inDynamic) && content.getType() instanceof ModifiableComplexType) {
+					((ModifiableComplexType) content.getType()).add(element);
+				}
+			}
+			// if we have an element at this point, set the value
+			if (element != null) {
+				content.set(fieldName, value);	
+			}
 		}
 	}
 	
