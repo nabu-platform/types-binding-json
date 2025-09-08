@@ -27,6 +27,7 @@ import java.nio.charset.Charset;
 import java.text.ParseException;
 import java.util.Collection;
 import java.util.Map;
+import java.util.concurrent.Callable;
 
 import org.slf4j.LoggerFactory;
 
@@ -433,6 +434,14 @@ public class JSONBinding extends BaseTypeBinding {
 	@SuppressWarnings({ "unchecked" })
 	private void marshal(Writer writer, Object value, Element<?> element, int depth) throws IOException {
 		try {
+			if (value instanceof Callable) {
+				try {
+					value = ((Callable<?>) value).call();
+				}
+				catch (Exception e) {
+					throw new RuntimeException(e);
+				}
+			}
 			if (value == null) {
 				writer.write("null");
 			}

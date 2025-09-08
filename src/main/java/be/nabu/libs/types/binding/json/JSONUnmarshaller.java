@@ -352,6 +352,17 @@ public class JSONUnmarshaller {
 		}
 		return null;
 	}
+	
+	private Element<?> getKeyValueElement(ComplexType type) {
+		TypeInstance keyValueInstance = new BaseTypeInstance(BeanResolver.getInstance().resolve(KeyValuePair.class));
+		for (Element<?> child : TypeUtils.getAllChildren(type)) {
+			// apart from it being a list, other child properties don't matter so strip them for subset comparison 
+			if (child.getType().isList(child.getProperties()) && TypeUtils.isSubset(new BaseTypeInstance(child.getType()), keyValueInstance)) {
+				return child;
+			}
+		}
+		return null;
+	}
 
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	private void unmarshalSingle(CountingReadableContainer<CharBuffer> readable, String fieldName, ComplexContent content, Integer index, boolean inDynamic, String rawFieldName) throws IOException, ParseException {
@@ -624,14 +635,10 @@ public class JSONUnmarshaller {
 			boolean isKeyValuePair = false;
 			// if there is no element, let's see if you have a catch all keyvaluepair list
 			if (content != null && (element == null || dynamicToKeyValue)) {
-				TypeInstance keyValueInstance = new BaseTypeInstance(BeanResolver.getInstance().resolve(KeyValuePair.class));
-				for (Element<?> child : TypeUtils.getAllChildren(content.getType())) {
-					// apart from it being a list, other child properties don't matter so strip them for subset comparison 
-					if (child.getType().isList(child.getProperties()) && TypeUtils.isSubset(new BaseTypeInstance(child.getType()), keyValueInstance)) {
-						element = child;
-						isKeyValuePair = true;
-						break;
-					}
+				Element<?> keyValueElement = getKeyValueElement(content.getType());
+				if (keyValueElement != null) {
+					element = keyValueElement;
+					isKeyValuePair = true;
 				}
 			}
 			// must be a simple value
@@ -751,6 +758,15 @@ public class JSONUnmarshaller {
 		}
 		// we set it explicitly so it is marked as set, this allows us to differentiate between a missing value and an explicit "null" value (important for PATCH)
 		else if (isExplicitNull) {
+			boolean isKeyValuePair = false;
+			// if there is no element but we are using dynamic key value pairs, do that!
+			if (element == null) {
+				Element<?> keyValueElement = getKeyValueElement(content.getType());
+				if (keyValueElement != null) {
+					element = keyValueElement;
+					isKeyValuePair = true;
+				}
+			}
 			// if there is no element for it, check if we want to create it dynamically
 			if (!ignoreUnknownElements && element == null && allowDynamicElements) {
 				// we assume it's a string...?
@@ -775,7 +791,12 @@ public class JSONUnmarshaller {
 			}
 			// if we have an element at this point, set the value
 			if (element != null) {
-				content.set(fieldName, value);	
+				if (isKeyValuePair) {
+					// currently we don't add them to the key/value pair list?
+				}
+				else {
+					content.set(fieldName, value);
+				}
 			}
 		}
 	}
