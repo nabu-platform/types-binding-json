@@ -515,6 +515,15 @@ public class JSONUnmarshaller {
 				if (maxLength == null) {
 					maxLength = MAX_SIZE;
 				}
+				// @2025-09-09: if you set an actual max size that matches _exactly_ with the content (e.g. country code with limit 2)
+				// so, if we only look ahead by the defined max size, we will never see the actual delimiter if it _is_ that max size!
+				// however, it seems that encoding for characters does not count towards the max length, so suppose the value is A", it has to be encoded as A\"
+				// however, that still counts as max size 2, even though it is 3 characters, because it's a transport thing
+				// for this reason, it becomes nearly impossible to guesstimate the actual possible size based on the max length
+				// the mechanism was added to allow mostly for _bigger_ strings (e.g. base64), so we just put a bottom on the max size
+				else if (maxLength < MAX_SIZE) {
+					maxLength = MAX_SIZE;
+				}
 				DelimitedCharContainer delimited = IOUtils.delimit(IOUtils.limitReadable(readable, maxLength), "\"", '\\');
 				String fieldValue = IOUtils.toString(delimited);
 				if (!delimited.isDelimiterFound()) {
@@ -570,6 +579,16 @@ public class JSONUnmarshaller {
 				else {
 					delimited = IOUtils.delimit(readable, "[^0-9.eE+-]+", 1);
 					value = single[0] + IOUtils.toString(delimited);
+					// interestingly we've had issues with a message like this:
+					// { "type": "TagSeen", "timestamp":"2025-09-03T17:28:40.8547487+02:00", "tags": ["41545356484400000008726A"], "tagswithrssi": [+TAGOBJECT-],  "location": "21" }
+					// which clearly contains an unreplaced placeholder
+					// however because of how this is parsed, it will actually end up with a string containing only "+" and thinking that it is a number
+					// to fully validate a json-compliant number, the following regex can be used:
+					// ^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$
+					// however, it does not allow numbers like "+0", "1.", "01" which is correct at the JSON spec level, however they _can_ be parsed successfully by java so i want to allow them 
+					if (!((String) value).matches("^.*[0-9]+.*$")) {
+						throw new ParseException("Not a valid number: " + value, 0);
+					}
 					if (parseNumbers) {
 						try {
 							if (((String) value).contains(".")) {
@@ -760,7 +779,7 @@ public class JSONUnmarshaller {
 		else if (isExplicitNull) {
 			boolean isKeyValuePair = false;
 			// if there is no element but we are using dynamic key value pairs, do that!
-			if (element == null) {
+			if (element == null && content != null) {
 				Element<?> keyValueElement = getKeyValueElement(content.getType());
 				if (keyValueElement != null) {
 					element = keyValueElement;
