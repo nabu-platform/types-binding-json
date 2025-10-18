@@ -95,6 +95,7 @@ public class JSONUnmarshaller {
 	private boolean allowNilUnicode = false;
 	private boolean parseNumbers = false;
 	private boolean ignoreInconsistentTypes = false;
+	private boolean replaceNonBreakingSpaces = true;
 	
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public ComplexContent unmarshal(ReadableContainer<CharBuffer> reader, ComplexType type) throws IOException, ParseException {
@@ -528,6 +529,9 @@ public class JSONUnmarshaller {
 				String fieldValue = IOUtils.toString(delimited);
 				if (!delimited.isDelimiterFound()) {
 					throw new ParseException("Could not find the closing quote of the string value", 0);
+				}
+				if (replaceNonBreakingSpaces && fieldValue != null) {
+					fieldValue = fieldValue.replace("\u00A0", " ");
 				}
 				fieldValue = unescape(fieldValue, allowNilUnicode);
 				if (decodeUnicode) {
