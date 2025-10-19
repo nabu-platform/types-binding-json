@@ -23,7 +23,9 @@ import java.math.BigInteger;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -32,6 +34,7 @@ import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.URIUtils;
 import be.nabu.libs.types.BaseTypeInstance;
 import be.nabu.libs.types.CollectionHandlerFactory;
+import be.nabu.libs.types.ComplexContentWrapperFactory;
 import be.nabu.libs.types.SimpleTypeWrapperFactory;
 import be.nabu.libs.types.TypeConverterFactory;
 import be.nabu.libs.types.TypeUtils;
@@ -53,6 +56,7 @@ import be.nabu.libs.types.binding.BindingUtils;
 import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.java.BeanType;
 import be.nabu.libs.types.properties.AliasProperty;
+import be.nabu.libs.types.properties.CollectionHandlerProviderProperty;
 import be.nabu.libs.types.properties.DynamicNameProperty;
 import be.nabu.libs.types.properties.MaxLengthProperty;
 import be.nabu.libs.types.properties.MaxOccursProperty;
@@ -96,6 +100,7 @@ public class JSONUnmarshaller {
 	private boolean parseNumbers = false;
 	private boolean ignoreInconsistentTypes = false;
 	private boolean replaceNonBreakingSpaces = true;
+	private boolean enableMapSupport = false;
 	
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public ComplexContent unmarshal(ReadableContainer<CharBuffer> reader, ComplexType type) throws IOException, ParseException {
@@ -398,8 +403,28 @@ public class JSONUnmarshaller {
 		boolean dynamicToKeyValue = false;
 		switch(single[0]) {
 			case '{':
+				
+				// check if we are dealing with a java map
+				CollectionHandlerProvider collectionHandler = element == null ? null : ValueUtils.getValue(CollectionHandlerProviderProperty.getInstance(), element.getProperties());
+				if (enableMapSupport && collectionHandler != null && Map.class.isAssignableFrom(collectionHandler.getCollectionClass())) {
+					Object object = content.get(element.getName());
+					if (object == null) {
+						object = new LinkedHashMap<String, Object>();
+						content.set(element.getName(), object);
+					}
+					// recursively parse
+					try {
+						readField(readable, ComplexContentWrapperFactory.getInstance().getWrapper().wrap(object), inDynamic);
+					}
+					catch (ParseException e) {
+						System.err.println("Could not parse field '" + fieldName + "' (index: " + index + ")");
+						throw e;
+					}
+					// we don't want the standard further handling, it doesn't work for maps
+					return;
+				}
 				// if we have complex content and we are trying to assign to a string value, don't parse it further, just do depth counting and assign it all as a string
-				if (element != null && element.getType() instanceof SimpleType && String.class.equals(((SimpleType<?>) element.getType()).getInstanceClass())) {
+				else if (element != null && element.getType() instanceof SimpleType && String.class.equals(((SimpleType<?>) element.getType()).getInstanceClass())) {
 					// we start at depth 1 cause we have the opening bracket
 					int depth = 1;
 					StringBuilder result = new StringBuilder();
@@ -1068,5 +1093,13 @@ public class JSONUnmarshaller {
 
 	public void setAllowAttributeFallback(boolean allowAttributeFallback) {
 		this.allowAttributeFallback = allowAttributeFallback;
+	}
+
+	public boolean isEnableMapSupport() {
+		return enableMapSupport;
+	}
+
+	public void setEnableMapSupport(boolean enableMapSupport) {
+		this.enableMapSupport = enableMapSupport;
 	}
 }

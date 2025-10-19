@@ -87,6 +87,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private boolean marshalNonExistingRequiredFields = true;
 	private boolean marshalExplicitNullValues = false; 
 	private boolean marshalStreams = true;
+	private boolean enableMapSupport;
 	
 	public JSONBinding(ModifiableComplexTypeGenerator complexTypeGenerator, Charset charset) {
 		this(complexTypeGenerator.newComplexType(), charset);
@@ -594,6 +595,7 @@ public class JSONBinding extends BaseTypeBinding {
 		jsonUnmarshaller.setIgnoreEmptyStrings(ignoreEmptyStrings);
 		jsonUnmarshaller.setAddDynamicStringsOnly(addDynamicStringsOnly);
 		jsonUnmarshaller.setAllowNilUnicode(allowNilCharacter);
+		jsonUnmarshaller.setEnableMapSupport(enableMapSupport);
 		return jsonUnmarshaller.unmarshal(readable, type);
 	}
 
@@ -763,6 +765,14 @@ public class JSONBinding extends BaseTypeBinding {
 
 	public void setMarshalExplicitNullValues(boolean marshalExplicitNullValues) {
 		this.marshalExplicitNullValues = marshalExplicitNullValues;
+	}
+
+	public boolean isEnableMapSupport() {
+		return enableMapSupport;
+	}
+
+	public void setEnableMapSupport(boolean enableMapSupport) {
+		this.enableMapSupport = enableMapSupport;
 	}
 
 }
