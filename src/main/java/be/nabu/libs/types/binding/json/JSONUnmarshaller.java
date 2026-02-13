@@ -76,7 +76,7 @@ public class JSONUnmarshaller {
 	private char [] single = new char[1];
 	
 	private static final int LOOK_AHEAD = 4096;
-	private static final int MAX_SIZE = 1024*1024*10;
+	private static final int MAX_SIZE = 1024*1024*20;
 	
 	// do best effort if we can
 	private boolean lenient = true;
