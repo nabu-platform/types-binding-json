@@ -69,6 +69,11 @@ import be.nabu.utils.io.api.CharBuffer;
 import be.nabu.utils.io.api.ReadableContainer;
 
 public class JSONBinding extends BaseTypeBinding {
+	
+	public static interface JSONDynamicBinding {
+		public String getName(ComplexContent parent, Element<?> element);
+		public Element<?> getElement(ComplexType parent, String jsonName);
+	}
 
 	private Charset charset;
 	private CollectionHandler collectionHandler = CollectionHandlerFactory.getInstance().getHandler();
@@ -88,6 +93,7 @@ public class JSONBinding extends BaseTypeBinding {
 	private boolean marshalExplicitNullValues = false; 
 	private boolean marshalStreams = true;
 	private boolean enableMapSupport;
+	private JSONDynamicBinding dynamicBinding;
 	
 	public JSONBinding(ModifiableComplexTypeGenerator complexTypeGenerator, Charset charset) {
 		this(complexTypeGenerator.newComplexType(), charset);
@@ -181,7 +187,6 @@ public class JSONBinding extends BaseTypeBinding {
 			Object value = content.get(element.getName());
 			// check if we have an explicitly set value, if so we might _want_ to convey null values even for optional fields (e.g. for a PATCH)
 			boolean hasExplicitValueToSet = value != null || (marshalExplicitNullValues && content.has(element.getName()));
-			Value<String> alias = useAlias ? element.getProperty(AliasProperty.getInstance()) : null;
 			// @2024-08-12: we only checked if the element itself was a list, however a singular object value might still represent a list at runtime
 			// e.g. in the diff routines in CDM
 			boolean isList = element.getType().isList(element.getProperties());
@@ -205,7 +210,7 @@ public class JSONBinding extends BaseTypeBinding {
 					}
 					boolean isFirstChild = true;
 					if (value instanceof Map) {
-						writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": {");
+						writer.write("\"" + getNameFor(content, element) + "\": {");
 						for (Object key : ((Map) value).keySet()) {
 							if (isFirstChild) {
 								isFirstChild = false;
@@ -328,7 +333,7 @@ public class JSONBinding extends BaseTypeBinding {
 								writer.write("[");
 							}
 							else {
-								writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": [");
+								writer.write("\"" + getNameFor(content, element) + "\": [");
 							}
 							boolean hasContent = false;
 							for (Object child : (Iterable) value) {
@@ -373,7 +378,7 @@ public class JSONBinding extends BaseTypeBinding {
 						if (prettyPrint) {
 							printDepth(writer, depth);
 						}
-						writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": []");
+						writer.write("\"" + getNameFor(content, element) + "\": []");
 					}
 				}
 			}
@@ -395,7 +400,7 @@ public class JSONBinding extends BaseTypeBinding {
 					// do nothing?
 				}
 				else {
-					writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": ");
+					writer.write("\"" + getNameFor(content, element) + "\": ");
 				}
 				marshal(writer, value, element, depth);
 			}
@@ -418,7 +423,7 @@ public class JSONBinding extends BaseTypeBinding {
 						// do nothing?
 					}
 					else {
-						writer.write("\"" + (alias == null ? element.getName() : alias.getValue()) + "\": null");
+						writer.write("\"" + getNameFor(content, element) + "\": null");
 					}
 				}
 			}
@@ -430,6 +435,17 @@ public class JSONBinding extends BaseTypeBinding {
 			}
 			writer.write("}");
 		}
+	}
+	
+	private String getNameFor(ComplexContent parent, Element<?> element) {
+		if (dynamicBinding != null) {
+			String name = dynamicBinding.getName(parent, element);
+			if (name != null) {
+				return name;
+			}
+		}
+		Value<String> alias = useAlias ? element.getProperty(AliasProperty.getInstance()) : null;
+		return (alias == null ? element.getName() : alias.getValue());
 	}
 
 	@SuppressWarnings({ "unchecked" })
@@ -773,6 +789,14 @@ public class JSONBinding extends BaseTypeBinding {
 
 	public void setEnableMapSupport(boolean enableMapSupport) {
 		this.enableMapSupport = enableMapSupport;
+	}
+
+	public JSONDynamicBinding getDynamicBinding() {
+		return dynamicBinding;
+	}
+
+	public void setDynamicBinding(JSONDynamicBinding dynamicBinding) {
+		this.dynamicBinding = dynamicBinding;
 	}
 
 }
