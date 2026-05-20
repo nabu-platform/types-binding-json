@@ -84,6 +84,7 @@ public class JSONBinding extends BaseTypeBinding {
 	// @2025-05-12 we have a usecase where an element in swagger is defined first as "@id", then another element "id". because the swagger parser is working without a fixed definition, when looking for "id", it can't find the definition of course at which point the fallback to "@id" becomes problematic
 	// there are good usecases where we _dont_ want the fallback, however it is set to true by default for legacy reasons
 	private boolean allowAttributeFallback = true;
+	private boolean normalize = true;
 	private ModifiableComplexTypeGenerator complexTypeGenerator;
 	private boolean ignoreRootIfArrayWrapper = false;
 	private boolean prettyPrint, ignoreInconsistentTypes;
@@ -612,6 +613,7 @@ public class JSONBinding extends BaseTypeBinding {
 		jsonUnmarshaller.setAddDynamicStringsOnly(addDynamicStringsOnly);
 		jsonUnmarshaller.setAllowNilUnicode(allowNilCharacter);
 		jsonUnmarshaller.setEnableMapSupport(enableMapSupport);
+		jsonUnmarshaller.setNormalize(normalize);
 		return jsonUnmarshaller.unmarshal(readable, type);
 	}
 
@@ -799,4 +801,11 @@ public class JSONBinding extends BaseTypeBinding {
 		this.dynamicBinding = dynamicBinding;
 	}
 
+	public boolean isNormalize() {
+		return normalize;
+	}
+
+	public void setNormalize(boolean normalize) {
+		this.normalize = normalize;
+	}
 }

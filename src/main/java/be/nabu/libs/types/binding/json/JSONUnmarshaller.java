@@ -1102,4 +1102,12 @@ public class JSONUnmarshaller {
 	public void setEnableMapSupport(boolean enableMapSupport) {
 		this.enableMapSupport = enableMapSupport;
 	}
+
+	public boolean isNormalize() {
+		return normalize;
+	}
+
+	public void setNormalize(boolean normalize) {
+		this.normalize = normalize;
+	}
 }
